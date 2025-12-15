@@ -66,7 +66,7 @@ BI-MARL-DR-UrbanMicrogrids/
 
 ### Clone the repository
 ```bash
-git clone https://github.com/<your-username>/BI-MARL-DR-UrbanMicrogrids.git
+git clone https://github.com/parsakhavarinejad/BI-MARL-DR-UrbanMicrogrids.git
 cd BI-MARL-DR-UrbanMicrogrids
 ```
 

@@ -1,6 +1,7 @@
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
+from utils.data_loader import SmartGridDataLaoder
 
 
 class SmartGridEnv(gym.Env):
@@ -14,7 +15,7 @@ class SmartGridEnv(gym.Env):
         )
 
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.num_agents, 3), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(self.num_agents, 8), dtype=np.float32
         )
 
         self.current_step = 0
@@ -43,7 +44,9 @@ class SmartGridEnv(gym.Env):
 
     def step(self, actions):
         obs = self._get_obs()
-        current_base_load, current_base_price, time_feature = obs[0], obs[1], obs[2]
+        current_base_load = obs[:, 0]
+        current_base_price = obs[:, 1]
+
         actual_load = current_base_load * (1 + actions)
         total_grid_load = np.sum(actual_load, axis=0)
         current_price = self._get_dynamic_price(total_grid_load, current_base_price)
@@ -68,15 +71,14 @@ class SmartGridEnv(gym.Env):
         return next_obs, np.array(rewards, dtype=np.float32), done, False, {}
 
     def _get_obs(self):
+        return self.day_data[:, self.current_step, :].astype(np.float32)
 
-        current_values_feature = self.day_data[:, self.current_step, :]
-        current_base_load = current_values_feature[:, 0]
-        current_base_price = current_values_feature[:, 2]
 
-        time_feature = np.full((self.num_agents,), self.current_step / self.total_steps)
-
-        return np.stack(
-            [current_base_load, current_base_price, time_feature],
-            axis=1,
-            dtype=np.float32,
-        )
+if __name__ == "__main__":
+    dataloader = SmartGridDataLaoder("data\IDEAL\panel_env_ready_15m.csv.gz")
+    env = SmartGridEnv(dataloader)
+    obs, _ = env.reset()
+    action = np.random.rand(12)
+    ob, rew, _, _, _ = env.step(action)
+    print("Observations shape is: ", obs.shape)
+    print("Reward is: ", rew)

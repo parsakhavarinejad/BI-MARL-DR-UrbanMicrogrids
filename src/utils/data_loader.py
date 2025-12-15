@@ -4,23 +4,53 @@ import numpy as np
 
 class SmartGridDataLaoder:
     """
-    In this class we preprocess the data and turn it to different episodes,
-    we reshape the data to (num_homes, length of the episode, the number of features)
+    Load and preprocess smart-grid time series data, then pack it into daily episodes.
 
-    In our first experiment the reshaped data has (12, 96, 3)
+    The main goal is to convert the raw panel data into a 3D tensor per day with shape:
+        (num_homes, episode_len, num_features)
 
-    class SmartGridDataLoader
-        input (str): the data path - in csv.gz format
-        output (np.array): daily episode per index
-        core method: get_episode
+    In the common 15-minute resolution setting:
+        episode_len = 96  (96 * 15min = 24h)
+
+    Example (first experiment):
+        (12, 96, 8)  -> 12 homes, 96 time steps, 8 features
+
+    Parameters
+    ----------
+    data_path : str
+        Path to the dataset file in CSV.GZ format.
+
+    Attributes
+    ----------
+    df : pandas.DataFrame
+        Loaded and preprocessed data.
+    feature_cols : list[str]
+        Feature columns used to build the episode tensor.
+    home_uinque : list
+        Sorted unique home IDs found in the dataset.
+    date_unique : list
+        Sorted unique dates found in the dataset.
+    daily_episodes : np.ndarray
+        Array of episodes with shape (num_days, num_homes, episode_len, num_features).
+    valid_date : list[str]
+        Dates that were successfully converted into complete episodes.
+
+    Methods
+    -------
+    get_episode(index)
+        Return the episode tensor for a given day index.
+    __len__()
+        Return number of valid daily episodes.
     """
 
     def __init__(self, data_path):
+        """Initialize the loader, build features, and prepare daily episodes."""
         print(f"Loading the data from {data_path}")
         self.df = pd.read_csv(data_path, compression="gzip")
 
         self.df["ts"] = pd.to_datetime(self.df["ts"])
         self.df["date"] = self.df["ts"].dt.date.astype("str")
+
         self.df["e_kwh_lag1"] = self.df.groupby("homeid")["e_kwh"].shift(
             1, fill_value=0
         )
@@ -30,10 +60,8 @@ class SmartGridDataLaoder:
 
         minutes_in_day = 24 * 60
         time_fraction = (
-            pd.to_datetime(self.df["ts"]).dt.hour * 60
-            + pd.to_datetime(self.df["ts"]).dt.minute
+            self.df["ts"].dt.hour * 60 + self.df["ts"].dt.minute
         ) / minutes_in_day
-
         self.df["tod_sin"] = np.sin(time_fraction * 2 * np.pi)
         self.df["tod_cos"] = np.cos(time_fraction * 2 * np.pi)
 
@@ -66,15 +94,26 @@ class SmartGridDataLaoder:
         self._process_episodes()
 
     def _process_episodes(self):
+        """
+        Convert the dataframe into a list of daily episode tensors.
 
-        episode_len = 96  # we have 96 numbers of 15min slice in a day
+        A day is considered valid only if it contains a complete grid of:
+            episode_len time steps for each home.
+
+        Notes
+        -----
+        This method fills:
+            - self.daily_episodes
+            - self.valid_date
+        """
+        episode_len = 96  # 96 slices of 15 minutes in a day
         num_homes = len(self.home_uinque)
         expected_rows = episode_len * num_homes
         valid_episode = []
 
         for date in self.date_unique:
-
             df_dates = self.df[self.df["date"] == date]
+
             if len(df_dates) != expected_rows:
                 print(f"Skipping incomplete date for {date}")
                 continue
@@ -94,14 +133,28 @@ class SmartGridDataLaoder:
         print(f"Successfully prepared {len(self.daily_episodes)} community episodes.")
 
     def get_episode(self, index):
-        """Returns (homes, steps, features) for a specific day index."""
+        """
+        Get a daily episode tensor by index.
+
+        Parameters
+        ----------
+        index : int
+            Day index in the prepared episode list.
+
+        Returns
+        -------
+        np.ndarray
+            Episode tensor with shape (homes, steps, features).
+        """
         return self.daily_episodes[index]
 
     def __len__(self):
+        """Return the number of valid daily episodes."""
         return len(self.daily_episodes)
 
 
+# -------- Test the script --------
 if __name__ == "__main__":
-    data_loader = SmartGridDataLaoder("data\IDEAL\panel_env_ready_15m.csv.gz")
+    data_loader = SmartGridDataLaoder(r"data\\IDEAL\\panel_env_ready_15m.csv.gz")
     episode = data_loader.get_episode(index=1)
     print(episode.shape)

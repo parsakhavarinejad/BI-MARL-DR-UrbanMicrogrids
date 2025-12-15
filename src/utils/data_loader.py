@@ -21,6 +21,25 @@ class SmartGridDataLaoder:
 
         self.df["ts"] = pd.to_datetime(self.df["ts"])
         self.df["date"] = self.df["ts"].dt.date.astype("str")
+        self.df["e_kwh_lag1"] = self.df.groupby("homeid")["e_kwh"].shift(
+            1, fill_value=0
+        )
+        self.df["e_kwh_roll_mean_4"] = self.df.groupby("homeid")["e_kwh"].transform(
+            lambda x: x.rolling(window=4, min_periods=1).mean()
+        )
+
+        minutes_in_day = 24 * 60
+        time_fraction = (
+            pd.to_datetime(self.df["ts"]).dt.hour * 60
+            + pd.to_datetime(self.df["ts"]).dt.minute
+        ) / minutes_in_day
+
+        self.df["tod_sin"] = np.sin(time_fraction * 2 * np.pi)
+        self.df["tod_cos"] = np.cos(time_fraction * 2 * np.pi)
+
+        day_fraction = (pd.to_datetime(self.df["date"]).dt.dayofweek) / 7
+        self.df["day_of_week_sin"] = np.sin(day_fraction * 2 * np.pi)
+        self.df["day_of_week_cos"] = np.cos(day_fraction * 2 * np.pi)
 
         self.df = self.df.sort_values(by=["date", "homeid", "ts"])
         self.home_uinque = sorted(self.df["homeid"].unique())
@@ -33,17 +52,24 @@ class SmartGridDataLaoder:
         self.daily_episodes = []
         self.valid_date = []
 
-        self.feature_cols = ["e_kwh", "p_w_mean", "unit_charge_pence_per_kwh"]
+        self.feature_cols = [
+            "e_kwh",
+            "unit_charge_pence_per_kwh",
+            "e_kwh_lag1",
+            "e_kwh_roll_mean_4",
+            "tod_sin",
+            "tod_cos",
+            "day_of_week_sin",
+            "day_of_week_cos",
+        ]
 
         self._process_episodes()
 
     def _process_episodes(self):
 
         episode_len = 96  # we have 96 numbers of 15min slice in a day
-        num_homes = len(self.date_unique)
-
+        num_homes = len(self.home_uinque)
         expected_rows = episode_len * num_homes
-
         valid_episode = []
 
         for date in self.date_unique:
@@ -73,3 +99,9 @@ class SmartGridDataLaoder:
 
     def __len__(self):
         return len(self.daily_episodes)
+
+
+if __name__ == "__main__":
+    data_loader = SmartGridDataLaoder("data\IDEAL\panel_env_ready_15m.csv.gz")
+    episode = data_loader.get_episode(index=1)
+    print(episode.shape)

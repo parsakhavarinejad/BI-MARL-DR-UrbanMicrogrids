@@ -147,16 +147,19 @@ class SmartGridEnv(gym.Env):
 
         actions = np.squeeze(actions)
 
+        actions = np.clip(actions, -1.0, 1.0)
+
         actual_load = current_base_load * (1 + actions)
         total_grid_load = np.sum(actual_load, axis=0)
 
         current_price = self._get_dynamic_price(total_grid_load, current_base_price)
 
+        scaling_factor = 1 / 2000
         rewards = []
         for agent in range(self.num_agents):
             cost = actual_load[agent] * current_price[agent]
             discomfort = (actions[agent]) ** 2
-            reward = -(cost + discomfort)
+            reward = -(cost + discomfort) * scaling_factor
             rewards.append(reward)
 
         self.current_step += 1
@@ -179,7 +182,13 @@ class SmartGridEnv(gym.Env):
         np.ndarray
             Observation matrix with shape (num_agents, 8).
         """
-        return self.day_data[:, self.current_step, :].astype(np.float32)
+        current_values_feature = self.day_data[:, self.current_step, :].astype(np.float32)
+
+        obs = current_values_feature.copy()
+        obs[:, 0] = obs[:, 0] / 10.0 
+        obs[:, 1] = obs[:, 1] / 50.0
+
+        return obs
 
 
 # -------- Test the script --------

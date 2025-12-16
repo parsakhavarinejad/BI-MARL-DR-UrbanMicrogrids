@@ -63,6 +63,8 @@ class ActorNetwork(nn.Module):
         mu = torch.tanh(self.fc5(x))
         sigma = F.softplus(self.fc6(x)) + 1e-6
 
+        sigma = torch.clamp(sigma, min=1e-6, max=1.0)
+        
         return mu, sigma
 
     def get_action(self, state):

@@ -1,0 +1,27 @@
+
+networks:
+  actor:
+    state_dim: 8 # num_features
+    action_dim: 1
+    lr: 1e-5
+
+  critic:
+    global_state_dim: 96 # 12 * 8 (num_houses * num_features)
+    lr: 4e-5
+
+
+agent:
+  k_epochs: 10
+  gamma: 0.95
+  eps_clip: 0.3
+
+
+data:
+  path: "data\\IDEAL\\panel_env_ready_15m.csv.gz"
+
+
+main:
+  num_episodes: 2500
+  num_agents: 12
+  update_interval: 20
+  num_steps_per_day: 96

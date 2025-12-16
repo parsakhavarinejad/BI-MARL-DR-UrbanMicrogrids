@@ -1,0 +1,16 @@
+
+networks:
+  actor:
+    state_dim: 8 # num_features
+    action_dim: 1
+    lr: 1e-4
+
+  critic:
+    global_state_dim: 96 # 12 * 8 (num_houses * num_features)
+    lr: 2e-4
+
+
+agent:
+  k_epochs: 4
+  gamma: 0.99
+  eps_clip: 0.2

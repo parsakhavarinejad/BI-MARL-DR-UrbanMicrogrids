@@ -3,11 +3,11 @@ networks:
   actor:
     state_dim: 8 # num_features
     action_dim: 1
-    lr: 1e-5
+    lr: 3e-4
 
   critic:
     global_state_dim: 96 # 12 * 8 (num_houses * num_features)
-    lr: 4e-5
+    lr: 1e-3
 
 
 agent:

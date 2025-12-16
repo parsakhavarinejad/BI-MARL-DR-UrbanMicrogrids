@@ -75,7 +75,7 @@ class MAPPOAgent:
 
         self.buffer = []
 
-    def store(self, acton, state, reward, done, log_prob):
+    def store(self, action, state, reward, done, log_prob):
         """
         Store a single transition in the on-policy buffer.
 
@@ -92,7 +92,7 @@ class MAPPOAgent:
         log_prob : np.ndarray or torch.Tensor
             Log-probability of the action under the behavior policy.
         """
-        obs = [acton, state, reward, done, log_prob]
+        obs = [action, state, reward, done, log_prob]
         self.buffer.append(obs)
 
     def actions(self, state):
@@ -147,43 +147,40 @@ class MAPPOAgent:
 
         rewards_tensor = torch.FloatTensor(np.array(discounted_reward)).to(self.device)
         old_states = torch.FloatTensor(np.array(state)).to(self.device)
-
-        # old_actions = torch.FloatTensor(np.array(actions)).to(self.device)
         old_logprobs = torch.FloatTensor(np.array(log_prob)).to(self.device)
 
         b, n, d = old_states.shape
         flat_states = old_states.view(-1, d)
-        # flat_actions = old_actions.view(-1, 1)
         flat_logprobs = old_logprobs.view(-1, 1)
         flat_rewards = rewards_tensor.view(-1, 1)
-
-        flat_rewards = (flat_rewards - flat_rewards.mean()) / (
-            flat_rewards.std() + 1e-6
-        )
 
         global_state = old_states.view(b, -1)
         flat_global_state = (
             global_state.unsqueeze(1).expand(-1, n, -1).reshape(-1, n * d)
         )
 
+        with torch.no_grad():
+            critic_value_old = self.critic_network(flat_global_state)
+            advantages = flat_rewards - critic_value_old
+            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-6)
+
         for _ in range(self.K_epochs):
             _, log_prob, entropy = self.actor_network.get_action(flat_states)
-            critic_value = self.critic_network(flat_global_state)
+            new_critic_value = self.critic_network(flat_global_state)
 
             log_prob = log_prob.squeeze()
             ratio = torch.exp(log_prob - flat_logprobs.squeeze().detach())
-            advantage = flat_rewards - critic_value.detach()
 
-            surr_1 = ratio * advantage
+            surr_1 = ratio * advantages.squeeze()
             surr_2 = (
-                torch.clamp(ratio, 1 - self.eps_clip, 1 + self.eps_clip) * advantage
+                torch.clamp(ratio, 1 - self.eps_clip, 1 + self.eps_clip) * advantages.squeeze()
             )
 
             loss = (
-                -torch.min(surr_1, surr_2)
-                + 0.5 * F.mse_loss(flat_rewards, critic_value)
-                - 0.01 * entropy
-            ).mean()
+                -torch.min(surr_1, surr_2).mean()
+                + 0.5 * F.mse_loss(flat_rewards, new_critic_value)
+                - 0.001 * entropy.mean()
+            )
 
             self.actor_opt.zero_grad()
             self.critic_opt.zero_grad()

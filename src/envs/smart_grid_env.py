@@ -154,7 +154,7 @@ class SmartGridEnv(gym.Env):
 
         current_price = self._get_dynamic_price(total_grid_load, current_base_price)
 
-        scaling_factor = 1 / 2000
+        scaling_factor = 1 / 100
         rewards = []
         for agent in range(self.num_agents):
             cost = actual_load[agent] * current_price[agent]
@@ -185,8 +185,8 @@ class SmartGridEnv(gym.Env):
         current_values_feature = self.day_data[:, self.current_step, :].astype(np.float32)
 
         obs = current_values_feature.copy()
-        obs[:, 0] = obs[:, 0] / 10.0 
-        obs[:, 1] = obs[:, 1] / 50.0
+        obs[:, 0] = (obs[:, 0] - 0.3) / 0.5   
+        obs[:, 1] = (obs[:, 1] - 15.0) / 10.0 
 
         return obs
 

@@ -51,6 +51,8 @@ class SmartGridDataLoader:
         self.df["ts"] = pd.to_datetime(self.df["ts"])
         self.df["date"] = self.df["ts"].dt.date.astype("str")
 
+        self.df = self.df.sort_values(by=["date", "homeid", "ts"])
+
         self.df["e_kwh_lag1"] = self.df.groupby("homeid")["e_kwh"].shift(
             1, fill_value=0
         )

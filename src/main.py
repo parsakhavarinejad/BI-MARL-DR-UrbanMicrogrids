@@ -179,7 +179,7 @@ def main():
 
         logger.log_episode(episode, episode_reward, agent_episode_rewards)
 
-        if (episode + 1) % 10 == 0:
+        if (episode + 1) % cfg.update_interval == 0:
             logger.print_progress(episode, cfg.num_episodes, episode_reward)
             logger.save_plots()
             logger.save_data()

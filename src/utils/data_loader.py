@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 
-class SmartGridDataLaoder:
+class SmartGridDataLoader:
     """
     Load and preprocess smart-grid time series data, then pack it into daily episodes.
 
@@ -155,6 +155,6 @@ class SmartGridDataLaoder:
 
 # -------- Test the script --------
 if __name__ == "__main__":
-    data_loader = SmartGridDataLaoder(r"data\\IDEAL\\panel_env_ready_15m.csv.gz")
+    data_loader = SmartGridDataLoader(r"data\\IDEAL\\panel_env_ready_15m.csv.gz")
     episode = data_loader.get_episode(index=1)
     print(episode.shape)

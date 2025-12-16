@@ -1,7 +1,7 @@
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
-from utils.data_loader import SmartGridDataLaoder
+from utils.data_loader import SmartGridDataLoader
 
 
 class SmartGridEnv(gym.Env):
@@ -145,7 +145,7 @@ class SmartGridEnv(gym.Env):
         current_base_load = obs[:, 0]
         current_base_price = obs[:, 1]
 
-        actions = np.asarray(actions, dtype=np.float32)
+        actions = np.squeeze(actions)
 
         actual_load = current_base_load * (1 + actions)
         total_grid_load = np.sum(actual_load, axis=0)
@@ -184,7 +184,7 @@ class SmartGridEnv(gym.Env):
 
 # -------- Test the script --------
 if __name__ == "__main__":
-    dataloader = SmartGridDataLaoder(r"data\\IDEAL\\panel_env_ready_15m.csv.gz")
+    dataloader = SmartGridDataLoader("data\\IDEAL\\panel_env_ready_15m.csv.gz")
     env = SmartGridEnv(dataloader)
 
     obs, _ = env.reset()

@@ -14,3 +14,14 @@ agent:
   k_epochs: 4
   gamma: 0.99
   eps_clip: 0.2
+
+
+data:
+  path: "data\\IDEAL\\panel_env_ready_15m.csv.gz"
+
+
+main:
+  num_episodes: 2500
+  num_agents: 12
+  update_interval: 10
+  num_steps_per_day: 96

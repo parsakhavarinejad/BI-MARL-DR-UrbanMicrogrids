@@ -1,6 +1,6 @@
 import numpy as np
-from src.marl.networks.actor_network import ActorNetwork
-from src.marl.networks.critic_network import CriticNetwork
+from marl.networks.actor_network import ActorNetwork
+from marl.networks.critic_network import CriticNetwork
 
 from torch.optim import Adam
 import torch
@@ -118,7 +118,7 @@ class MAPPOAgent:
 
         return action.cpu().numpy(), log_prob.cpu().numpy()
 
-    def update(self, state):
+    def update(self):
         """
         Update actor and critic using PPO-style clipped objective.
 
@@ -160,7 +160,6 @@ class MAPPOAgent:
         flat_rewards = (flat_rewards - flat_rewards.mean()) / (
             flat_rewards.std() + 1e-6
         )
-        flat_rewards = flat_rewards.unsqueeze(1).expand(-1, n, -1).reshape(-1, 1) 
 
         global_state = old_states.view(b, -1)
         flat_global_state = (
@@ -215,7 +214,7 @@ if __name__ == "__main__":
 
     print("Buffer length before update:", len(agent.buffer))
 
-    agent.update(state)
+    agent.update()
 
     print("Buffer length after update:", len(agent.buffer))
     print("Update ran successfully.")

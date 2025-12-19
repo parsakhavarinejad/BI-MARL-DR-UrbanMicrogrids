@@ -115,8 +115,9 @@ class SmartGridEnv(gym.Env):
         """
         den = max(self.expected_load[self.current_step], 1e-3)
         ratio = total_grid_load / den
-        ratio = np.clip(ratio, 0.0, 5.0)  # example cap
+        ratio = np.clip(ratio, 0.0, 3.0) 
         total_price = base_price * (1 + alpha * ratio**2)
+        total_price = np.clip(total_price, 0.5 * base_price, 2.0 * base_price)
         return total_price
 
     def step(self, actions):
@@ -158,10 +159,12 @@ class SmartGridEnv(gym.Env):
         current_price = self._get_dynamic_price(total_grid_load, current_base_price)
 
         scaling_factor = 1 / 100
+        discomfort_weight = 120.0
+        
         rewards = []
         for agent in range(self.num_agents):
             cost = actual_load[agent] * current_price[agent]
-            discomfort = (actions[agent]) ** 2
+            discomfort = (actions[agent]) ** 2 * discomfort_weight
             reward = -(cost + discomfort) * scaling_factor
             rewards.append(reward)
 
@@ -185,13 +188,18 @@ class SmartGridEnv(gym.Env):
         np.ndarray
             Observation matrix with shape (num_agents, 8).
         """
-        current_values_feature = self._get_obs_raw().copy()
+        obs = self._get_obs_raw().copy()
+        load_clip = float(self.data_loader.load_clip)
+        obs[:, 0] = np.clip(obs[:, 0], 0.0, load_clip) / (load_clip + 1e-6)
+        obs[:, 0] = 2.0 * obs[:, 0] - 1.0
 
-        obs = current_values_feature.copy()
-        obs[:, 0] = (obs[:, 0] - 0.3) / 0.5   
-        obs[:, 1] = (obs[:, 1] - 15.0) / 10.0 
+        pmin = float(self.data_loader.price_min)
+        pmax = float(self.data_loader.price_max)
+        obs[:, 1] = np.clip(obs[:, 1], pmin, pmax)
+        obs[:, 1] = (obs[:, 1] - pmin) / (pmax - pmin + 1e-6)
+        obs[:, 1] = 2.0 * obs[:, 1] - 1.0
 
-        return obs
+        return obs.astype(np.float32)
 
     
     def _get_obs_raw(self):

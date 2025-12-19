@@ -61,9 +61,10 @@ class ActorNetwork(nn.Module):
         action, _, _ = self.get_action(state)
         return action
 
-    def get_action(self, state):
+    def sample(self, state):
         """
-        Sample tanh-squashed action and compute corrected log_prob + entropy.
+        Samples pre_tanh ~ N(mu, std), then action = tanh(pre_tanh).
+        Returns: action, log_prob(action|state), entropy, pre_tanh
         """
         mu, std = self.forward(state)
         dist = Normal(mu, std)
@@ -72,13 +73,26 @@ class ActorNetwork(nn.Module):
         action = torch.tanh(pre_tanh)
 
         log_prob = dist.log_prob(pre_tanh).sum(dim=-1)
-
-        # tanh correction: log|det(d(tanh)/dx)| = sum(log(1 - tanh(x)^2))
         log_prob -= torch.sum(torch.log(1.0 - action.pow(2) + 1e-6), dim=-1)
 
         entropy = dist.entropy().sum(dim=-1)
+        return action, log_prob, entropy, pre_tanh
 
-        return action, log_prob, entropy
+    def evaluate_pre_tanh(self, state, pre_tanh):
+        """
+        Evaluate log_prob + entropy for a GIVEN pre_tanh sample.
+        Returns: log_prob, entropy
+        """
+        mu, std = self.forward(state)
+        dist = Normal(mu, std)
+
+        action = torch.tanh(pre_tanh)
+
+        log_prob = dist.log_prob(pre_tanh).sum(dim=-1)
+        log_prob -= torch.sum(torch.log(1.0 - action.pow(2) + 1e-6), dim=-1)
+
+        entropy = dist.entropy().sum(dim=-1)
+        return log_prob, entropy
 
 
 # ---------- Test ----------
@@ -86,11 +100,13 @@ if __name__ == "__main__":
     x = torch.rand(12, 8)
     actor_network = ActorNetwork(8, 1)
 
-    mu, std = actor_network(x)
-    print("mu: ", mu.shape)
-    print("std: ", std.shape)
+    with torch.no_grad:
+        mu, std = actor_network(x)
+        print("mu: ", mu.shape)
+        print("std: ", std.shape)
 
-    sample_action, log_prob, entropy = actor_network.get_action(x)
-    print("Sample Action: ", sample_action.shape)
-    print("Log prob: ", log_prob.shape)
-    print("Entropy: ", entropy.shape)
+   
+        sample_action, log_prob, entropy = actor_network.sample(x)
+        print("Sample Action: ", sample_action.shape)
+        print("Log prob: ", log_prob.shape)
+        print("Entropy: ", entropy.shape)

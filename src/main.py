@@ -10,6 +10,7 @@ from envs.smart_grid_env import SmartGridEnv
 from marl.agents.mappo_agent import MAPPOAgent
 from utils.config_parser import Config
 
+from utils.visualization import save_paper_visualizations
 
 def parse_args():
     """
@@ -164,9 +165,9 @@ def main():
         agent_episode_rewards = np.zeros(cfg.num_agents, dtype=np.float32)
 
         for _ in range(cfg.num_steps_per_day):
-            action, logprob = mappo_agent.actions(obs)
+            action, logprob, pre_tanh = mappo_agent.actions(obs)
             next_obs, reward, terminated, truncated, _ = env.step(action)
-            mappo_agent.store(action, obs, reward, terminated, logprob)
+            mappo_agent.store(action, obs, reward, terminated, logprob, pre_tanh)
 
             obs = next_obs
             episode_reward += float(np.sum(reward))
@@ -175,17 +176,18 @@ def main():
             if terminated or truncated:
                 break
 
-        mappo_agent.update()
-
+        
         logger.log_episode(episode, episode_reward, agent_episode_rewards)
 
         if (episode + 1) % cfg.update_interval == 0:
+            mappo_agent.update()
             logger.print_progress(episode, cfg.num_episodes, episode_reward)
             logger.save_plots()
             logger.save_data()
 
     print("Training Complete")
 
+    save_paper_visualizations(mappo_agent, env, save_dir=logger.save_dir)
 
 if __name__ == "__main__":
     main()

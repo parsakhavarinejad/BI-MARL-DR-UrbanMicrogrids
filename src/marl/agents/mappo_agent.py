@@ -75,7 +75,7 @@ class MAPPOAgent:
 
         self.buffer = []
 
-    def store(self, action, state, reward, done, log_prob):
+    def store(self, action, state, reward, done, log_prob, pre_tanh):
         """
         Store a single transition in the on-policy buffer.
 
@@ -92,7 +92,7 @@ class MAPPOAgent:
         log_prob : np.ndarray or torch.Tensor
             Log-probability of the action under the behavior policy.
         """
-        obs = [action, state, reward, done, log_prob]
+        obs = [action, state, reward, done, log_prob, pre_tanh]
         self.buffer.append(obs)
 
     def actions(self, state):
@@ -114,9 +114,9 @@ class MAPPOAgent:
         state = torch.FloatTensor(state).to(self.device)
 
         with torch.no_grad():
-            action, log_prob, _ = self.actor_network.get_action(state)
+            action, log_prob, _, pre_tanh = self.actor_network.sample(state)
 
-        return action.cpu().numpy(), log_prob.cpu().numpy()
+        return action.cpu().numpy(), log_prob.cpu().numpy(), pre_tanh.cpu().numpy()
 
     def update(self):
         """
@@ -133,7 +133,7 @@ class MAPPOAgent:
         state : Any
             Unused in the current implementation (kept to preserve structure).
         """
-        _, state, rewards, done, log_prob = zip(*self.buffer)
+        _, state, rewards, done, log_prob, pre_tanhs = zip(*self.buffer)
 
         discounted_reward = []
         current_reward = 0
@@ -148,11 +148,15 @@ class MAPPOAgent:
         rewards_tensor = torch.FloatTensor(np.array(discounted_reward)).to(self.device)
         old_states = torch.FloatTensor(np.array(state)).to(self.device)
         old_logprobs = torch.FloatTensor(np.array(log_prob)).to(self.device)
+        old_pre_tanh = torch.FloatTensor(np.array(pre_tanhs)).to(self.device) 
+        a_dim = old_pre_tanh.shape[-1]
 
         b, n, d = old_states.shape
         flat_states = old_states.view(-1, d)
-        flat_logprobs = old_logprobs.view(-1, 1)
-        flat_rewards = rewards_tensor.view(-1, 1)
+        flat_old_logprobs = old_logprobs.reshape(-1) 
+        flat_rewards = rewards_tensor.reshape(-1)
+        flat_pre_tanh = old_pre_tanh.reshape(-1, a_dim)   
+        
 
         global_state = old_states.view(b, -1)
         flat_global_state = (
@@ -160,36 +164,33 @@ class MAPPOAgent:
         )
 
         with torch.no_grad():
-            critic_value_old = self.critic_network(flat_global_state)
+            critic_value_old = self.critic_network(flat_global_state).reshape(-1)   
             advantages = flat_rewards - critic_value_old
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-6)
 
         for _ in range(self.K_epochs):
-            _, log_prob, entropy = self.actor_network.get_action(flat_states)
-            new_critic_value = self.critic_network(flat_global_state)
+            new_logprob, entropy = self.actor_network.evaluate_pre_tanh(flat_states, flat_pre_tanh)
+            new_logprob = new_logprob.reshape(-1)
 
-            log_prob = log_prob.squeeze()
-            ratio = torch.exp(log_prob - flat_logprobs.squeeze().detach())
+            ratio = torch.exp(new_logprob - flat_old_logprobs.detach())
 
-            surr_1 = ratio * advantages.squeeze()
-            surr_2 = (
-                torch.clamp(ratio, 1 - self.eps_clip, 1 + self.eps_clip) * advantages.squeeze()
-            )
+            surr1 = ratio * advantages
+            surr2 = torch.clamp(ratio, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
 
-            loss = (
-                -torch.min(surr_1, surr_2).mean()
-                + 0.5 * F.mse_loss(flat_rewards, new_critic_value)
-                - 0.001 * entropy.mean()
-            )
+            new_value = self.critic_network(flat_global_state).reshape(-1)
+
+            actor_loss = -torch.min(surr1, surr2).mean()
+            critic_loss = 0.5 * F.mse_loss(new_value, flat_rewards)
+            entropy_bonus = entropy.mean()
+
+            loss = actor_loss + critic_loss - 0.001 * entropy_bonus
 
             self.actor_opt.zero_grad()
             self.critic_opt.zero_grad()
-
             loss.backward()
-
             self.actor_opt.step()
             self.critic_opt.step()
-
+        
         self.buffer = []
         self.old_actor_network.load_state_dict(self.actor_network.state_dict())
 

@@ -1,98 +1,84 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributions import Normal
 
 
 class ActorNetwork(nn.Module):
     """
-    Gaussian actor network for continuous-action reinforcement learning.
+    Tanh-squashed Gaussian actor for bounded continuous actions in PPO/MAPPO.
 
-    This network maps an input state to the parameters of a Gaussian policy:
-        - mean (mu)
-        - standard deviation (sigma)
+    Produces a Normal distribution in unconstrained space (pre-tanh),
+    then samples and squashes with tanh to fit actions in [-1, 1].
 
-    The policy is defined as:
-        π(a | s) = Normal(mu(s), sigma(s))
-
-    Notes
-    -----
-    - `mu` is squashed with `tanh` to keep actions bounded.
-    - `sigma` is produced using `softplus` to ensure positivity.
-    - The network is suitable for PPO / A2C-style actor–critic methods.
+    Returns:
+      - action (tanh-squashed)
+      - log_prob (with tanh correction)
+      - entropy (of the underlying Normal, pre-tanh)
     """
 
     def __init__(self, state_dim, action_dim):
-        """
-        Initialize the actor network.
-
-        Parameters
-        ----------
-        state_dim : int
-            Dimension of the input state.
-        action_dim : int
-            Dimension of the action space.
-        """
         super().__init__()
 
         self.fc1 = nn.Linear(state_dim, 64)
         self.fc2 = nn.Linear(64, 128)
         self.fc3 = nn.Linear(128, 128)
         self.fc4 = nn.Linear(128, 64)
-        self.fc5 = nn.Linear(64, action_dim)
-        self.fc6 = nn.Linear(64, action_dim)
+
+        self.mu_head = nn.Linear(64, action_dim)
+        self.log_std_head = nn.Linear(64, action_dim)
+
+        self.LOG_STD_MIN = -5.0   
+        self.LOG_STD_MAX = 0.0   
 
     def forward(self, x):
         """
-        Forward pass of the actor network.
+        Returns parameters of the *pre-tanh* Gaussian: mean and std.
 
-        Parameters
-        ----------
-        x : torch.Tensor
-            Input state tensor with shape (..., state_dim).
-
-        Returns
-        -------
-        mu : torch.Tensor
-            Mean of the Gaussian policy, shape (..., action_dim).
-        sigma : torch.Tensor
-            Standard deviation of the Gaussian policy, shape (..., action_dim).
+        mu: unconstrained (no tanh here)
+        std: exp(log_std), clipped via log_std bounds for stability
         """
-        x = F.relu(self.fc2(F.relu(self.fc1(x))))
-        x = F.relu(self.fc4(F.relu(self.fc3(x))))
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        x = F.relu(self.fc4(x))
 
-        mu = torch.tanh(self.fc5(x))
-        sigma = F.softplus(self.fc6(x)) + 1e-6
+        mu = self.mu_head(x)
 
-        sigma = torch.clamp(sigma, min=1e-6, max=1.0)
-        
-        return mu, sigma
+        log_std = self.log_std_head(x)
+        log_std = torch.clamp(log_std, self.LOG_STD_MIN, self.LOG_STD_MAX)
+        std = torch.exp(log_std)
+
+        return mu, std
+
+    @torch.no_grad()
+    def act(self, state):
+        """
+        Convenience method for environment interaction:
+        returns action only (no grad). Useful in rollout collection.
+        """
+        action, _, _ = self.get_action(state)
+        return action
 
     def get_action(self, state):
         """
-        Sample an action from the policy given a state.
-
-        Parameters
-        ----------
-        state : torch.Tensor
-            Input state tensor with shape (..., state_dim).
-
-        Returns
-        -------
-        sample_action : torch.Tensor
-            Action sampled from the Gaussian policy.
-        log_prob : torch.Tensor
-            Log-probability of the sampled action.
-        entropy : torch.Tensor
-            Entropy of the Gaussian policy.
+        Sample tanh-squashed action and compute corrected log_prob + entropy.
         """
-        mu, sigma = self.forward(state)
-        normal_distribution = torch.distributions.Normal(mu, sigma)
+        mu, std = self.forward(state)
+        dist = Normal(mu, std)
 
-        sample_action = normal_distribution.sample()
-        log_prob = normal_distribution.log_prob(sample_action)
-        entropy = normal_distribution.entropy()
+        pre_tanh = dist.rsample()
+        action = torch.tanh(pre_tanh)
 
-        return sample_action, log_prob, entropy
+        log_prob = dist.log_prob(pre_tanh).sum(dim=-1)
+
+        # tanh correction: log|det(d(tanh)/dx)| = sum(log(1 - tanh(x)^2))
+        log_prob -= torch.sum(torch.log(1.0 - action.pow(2) + 1e-6), dim=-1)
+
+        entropy = dist.entropy().sum(dim=-1)
+
+        return action, log_prob, entropy
 
 
 # ---------- Test ----------
@@ -100,12 +86,11 @@ if __name__ == "__main__":
     x = torch.rand(12, 8)
     actor_network = ActorNetwork(8, 1)
 
-    mu, sigma = actor_network(x)
+    mu, std = actor_network(x)
     print("mu: ", mu.shape)
-    print("sigma: ", sigma.shape)
+    print("std: ", std.shape)
 
     sample_action, log_prob, entropy = actor_network.get_action(x)
-
     print("Sample Action: ", sample_action.shape)
     print("Log prob: ", log_prob.shape)
     print("Entropy: ", entropy.shape)

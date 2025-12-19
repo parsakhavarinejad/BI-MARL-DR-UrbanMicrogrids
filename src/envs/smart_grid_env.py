@@ -113,9 +113,10 @@ class SmartGridEnv(gym.Env):
         np.ndarray
             Dynamic price per agent, shape (num_agents,).
         """
-        total_price = base_price * (
-            1 + alpha * (total_grid_load / self.expected_load[self.current_step]) ** 2
-        )
+        den = max(self.expected_load[self.current_step], 1e-3)
+        ratio = total_grid_load / den
+        ratio = np.clip(ratio, 0.0, 5.0)  # example cap
+        total_price = base_price * (1 + alpha * ratio**2)
         return total_price
 
     def step(self, actions):
@@ -141,9 +142,11 @@ class SmartGridEnv(gym.Env):
         info : dict
             Empty info dict.
         """
-        obs = self._get_obs()
-        current_base_load = obs[:, 0]
-        current_base_price = obs[:, 1]
+        raw = self._get_obs_raw()
+        obs = self._get_obs() 
+
+        current_base_load = raw[:, 0]
+        current_base_price = raw[:, 1]
 
         actions = np.squeeze(actions)
 
@@ -168,7 +171,7 @@ class SmartGridEnv(gym.Env):
         next_obs = (
             self._get_obs()
             if not done
-            else np.zeros((self.num_agents, 3), dtype=np.float32)
+            else np.zeros((self.num_agents, 8), dtype=np.float32)
         )
 
         return next_obs, np.array(rewards, dtype=np.float32), done, False, {}
@@ -182,13 +185,17 @@ class SmartGridEnv(gym.Env):
         np.ndarray
             Observation matrix with shape (num_agents, 8).
         """
-        current_values_feature = self.day_data[:, self.current_step, :].astype(np.float32)
+        current_values_feature = self._get_obs_raw().copy()
 
         obs = current_values_feature.copy()
         obs[:, 0] = (obs[:, 0] - 0.3) / 0.5   
         obs[:, 1] = (obs[:, 1] - 15.0) / 10.0 
 
         return obs
+
+    
+    def _get_obs_raw(self):
+        return self.day_data[:, self.current_step, :].astype(np.float32)
 
 
 # -------- Test the script --------

@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -29,8 +28,8 @@ class ActorNetwork(nn.Module):
         self.mu_head = nn.Linear(64, action_dim)
         self.log_std_head = nn.Linear(64, action_dim)
 
-        self.LOG_STD_MIN = -5.0   
-        self.LOG_STD_MAX = 0.0   
+        self.LOG_STD_MIN = -5.0
+        self.LOG_STD_MAX = 0.0
 
     def forward(self, x):
         """
@@ -105,7 +104,6 @@ if __name__ == "__main__":
         print("mu: ", mu.shape)
         print("std: ", std.shape)
 
-   
         sample_action, log_prob, entropy = actor_network.sample(x)
         print("Sample Action: ", sample_action.shape)
         print("Log prob: ", log_prob.shape)

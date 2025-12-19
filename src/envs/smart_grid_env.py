@@ -115,7 +115,7 @@ class SmartGridEnv(gym.Env):
         """
         den = max(self.expected_load[self.current_step], 1e-3)
         ratio = total_grid_load / den
-        ratio = np.clip(ratio, 0.0, 3.0) 
+        ratio = np.clip(ratio, 0.0, 3.0)
         total_price = base_price * (1 + alpha * ratio**2)
         total_price = np.clip(total_price, 0.5 * base_price, 2.0 * base_price)
         return total_price
@@ -144,7 +144,7 @@ class SmartGridEnv(gym.Env):
             Empty info dict.
         """
         raw = self._get_obs_raw()
-        obs = self._get_obs() 
+        obs = self._get_obs()
 
         current_base_load = raw[:, 0]
         current_base_price = raw[:, 1]
@@ -160,7 +160,7 @@ class SmartGridEnv(gym.Env):
 
         scaling_factor = 1 / 100
         discomfort_weight = 120.0
-        
+
         rewards = []
         for agent in range(self.num_agents):
             cost = actual_load[agent] * current_price[agent]
@@ -201,7 +201,6 @@ class SmartGridEnv(gym.Env):
 
         return obs.astype(np.float32)
 
-    
     def _get_obs_raw(self):
         return self.day_data[:, self.current_step, :].astype(np.float32)
 

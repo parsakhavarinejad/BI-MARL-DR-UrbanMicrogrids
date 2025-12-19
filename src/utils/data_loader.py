@@ -129,16 +129,10 @@ class SmartGridDataLoader:
             IDX_LOAD = self.feature_cols.index("e_kwh")
             IDX_PRICE = self.feature_cols.index("unit_charge_pence_per_kwh")
 
-            values[:, IDX_LOAD] = np.clip(
-                values[:, IDX_LOAD],
-                0.0,
-                self.load_clip
-            )
+            values[:, IDX_LOAD] = np.clip(values[:, IDX_LOAD], 0.0, self.load_clip)
 
             values[:, IDX_PRICE] = np.clip(
-                values[:, IDX_PRICE],
-                self.price_min,
-                self.price_max
+                values[:, IDX_PRICE], self.price_min, self.price_max
             )
 
             try:

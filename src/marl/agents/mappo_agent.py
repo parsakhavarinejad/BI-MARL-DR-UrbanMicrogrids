@@ -148,15 +148,14 @@ class MAPPOAgent:
         rewards_tensor = torch.FloatTensor(np.array(discounted_reward)).to(self.device)
         old_states = torch.FloatTensor(np.array(state)).to(self.device)
         old_logprobs = torch.FloatTensor(np.array(log_prob)).to(self.device)
-        old_pre_tanh = torch.FloatTensor(np.array(pre_tanhs)).to(self.device) 
+        old_pre_tanh = torch.FloatTensor(np.array(pre_tanhs)).to(self.device)
         a_dim = old_pre_tanh.shape[-1]
 
         b, n, d = old_states.shape
         flat_states = old_states.view(-1, d)
-        flat_old_logprobs = old_logprobs.reshape(-1) 
+        flat_old_logprobs = old_logprobs.reshape(-1)
         flat_rewards = rewards_tensor.reshape(-1)
-        flat_pre_tanh = old_pre_tanh.reshape(-1, a_dim)   
-        
+        flat_pre_tanh = old_pre_tanh.reshape(-1, a_dim)
 
         global_state = old_states.view(b, -1)
         flat_global_state = (
@@ -164,18 +163,22 @@ class MAPPOAgent:
         )
 
         with torch.no_grad():
-            critic_value_old = self.critic_network(flat_global_state).reshape(-1)   
+            critic_value_old = self.critic_network(flat_global_state).reshape(-1)
             advantages = flat_rewards - critic_value_old
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-6)
 
         for _ in range(self.K_epochs):
-            new_logprob, entropy = self.actor_network.evaluate_pre_tanh(flat_states, flat_pre_tanh)
+            new_logprob, entropy = self.actor_network.evaluate_pre_tanh(
+                flat_states, flat_pre_tanh
+            )
             new_logprob = new_logprob.reshape(-1)
 
             ratio = torch.exp(new_logprob - flat_old_logprobs.detach())
 
             surr1 = ratio * advantages
-            surr2 = torch.clamp(ratio, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
+            surr2 = (
+                torch.clamp(ratio, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
+            )
 
             new_value = self.critic_network(flat_global_state).reshape(-1)
 
@@ -190,15 +193,23 @@ class MAPPOAgent:
             loss.backward()
             self.actor_opt.step()
             self.critic_opt.step()
-        
+
         self.buffer = []
         self.old_actor_network.load_state_dict(self.actor_network.state_dict())
 
 
 # ---------- Test ----------
 if __name__ == "__main__":
-    agent = MAPPOAgent(state_dim=8, action_dim=1, global_state_dim=96,
-                       ac_lr=1e-4, cr_lr=2e-4, K_epochs=2, gamma=0.99, eps_clip=0.2)
+    agent = MAPPOAgent(
+        state_dim=8,
+        action_dim=1,
+        global_state_dim=96,
+        ac_lr=1e-4,
+        cr_lr=2e-4,
+        K_epochs=2,
+        gamma=0.99,
+        eps_clip=0.2,
+    )
 
     b = 5  # number of time steps collected in the buffer
 

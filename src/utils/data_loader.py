@@ -48,8 +48,15 @@ class SmartGridDataLoader:
         print(f"Loading the data from {data_path}")
         self.df = pd.read_csv(data_path, compression="gzip")
 
+        self.load_clip = self.df["e_kwh"].quantile(0.99)
+
+        self.price_min = self.df["unit_charge_pence_per_kwh"].quantile(0.01)
+        self.price_max = self.df["unit_charge_pence_per_kwh"].quantile(0.99)
+
         self.df["ts"] = pd.to_datetime(self.df["ts"])
         self.df["date"] = self.df["ts"].dt.date.astype("str")
+
+        self.df = self.df.sort_values(by=["date", "homeid", "ts"])
 
         self.df["e_kwh_lag1"] = self.df.groupby("homeid")["e_kwh"].shift(
             1, fill_value=0
@@ -118,7 +125,21 @@ class SmartGridDataLoader:
                 print(f"Skipping incomplete date for {date}")
                 continue
 
-            values = df_dates[self.feature_cols].values
+            values = df_dates[self.feature_cols].values.copy()
+            IDX_LOAD = self.feature_cols.index("e_kwh")
+            IDX_PRICE = self.feature_cols.index("unit_charge_pence_per_kwh")
+
+            values[:, IDX_LOAD] = np.clip(
+                values[:, IDX_LOAD],
+                0.0,
+                self.load_clip
+            )
+
+            values[:, IDX_PRICE] = np.clip(
+                values[:, IDX_PRICE],
+                self.price_min,
+                self.price_max
+            )
 
             try:
                 episode_matrix = values.reshape(

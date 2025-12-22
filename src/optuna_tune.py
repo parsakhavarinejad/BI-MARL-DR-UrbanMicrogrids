@@ -171,7 +171,7 @@ def main():
             "discomfort_weight": cfg.env_discomfort_weight
         }
 
-        score =     (
+        score = train_short_budget(
             cfg=cfg,
             hp=hp,
             train_episodes=args.train_episodes,

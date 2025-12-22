@@ -162,17 +162,16 @@ def main():
             "actor_lr": trial.suggest_float("actor_lr", 1e-5, 3e-4, log=True),
             "critic_lr": trial.suggest_float("critic_lr", 1e-5, 1e-3, log=True),
             # PPO/MAPPO core
-            "gamma": trial.suggest_float("gamma", 0.92, 0.999),
+            "gamma": 0.99, # trial.suggest_float("gamma", 0.92, 0.999),
             "eps_clip": trial.suggest_float("eps_clip", 0.1, 0.4),
             "k_epochs": trial.suggest_int("k_epochs", 3, 20),
-            "entropy_coeff": trial.suggest_float("entropy_coeff", 0.0, 0.02),
+            "entropy_coeff": trial.suggest_float("entropy_coeff", 0.0, 0.005),
             # training schedule
-            "update_interval": trial.suggest_int("update_interval", 1, 25),
-            "discomfort_weight": trial.suggest_float("discomfort_weight", 1e-4, 1e-1, log=True),
-
+            "update_interval": trial.suggest_int("update_interval", 15, 20),
+            "discomfort_weight": cfg.env_discomfort_weight
         }
 
-        score = train_short_budget(
+        score =     (
             cfg=cfg,
             hp=hp,
             train_episodes=args.train_episodes,

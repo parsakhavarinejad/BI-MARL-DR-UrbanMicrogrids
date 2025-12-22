@@ -35,6 +35,7 @@ class MAPPOAgent:
         K_epochs,
         gamma,
         eps_clip,
+        entropy_coeff
     ):
         """
         Initialize actor/critic networks, optimizers, and training hyperparameters.
@@ -73,6 +74,7 @@ class MAPPOAgent:
         self.gamma = gamma
         self.eps_clip = eps_clip
 
+        self.agent_entropy_coeff = entropy_coeff
         self.buffer = []
 
     def store(self, action, state, reward, done, log_prob, pre_tanh):
@@ -186,7 +188,8 @@ class MAPPOAgent:
             critic_loss = 0.5 * F.mse_loss(new_value, flat_rewards)
             entropy_bonus = entropy.mean()
 
-            loss = actor_loss + critic_loss - 0.001 * entropy_bonus
+            entropy_coeff = self.agent.entropy_coeff
+            loss = actor_loss + critic_loss - entropy_coeff * entropy_bonus
 
             self.actor_opt.zero_grad()
             self.critic_opt.zero_grad()

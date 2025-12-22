@@ -14,6 +14,7 @@ agent:
   k_epochs: 10
   gamma: 0.99
   eps_clip: 0.3
+  entropy_coeff: 0.001
 
 
 data:
@@ -21,7 +22,13 @@ data:
 
 
 main:
-  num_episodes: 1000
+  num_episodes: 10
   num_agents: 12
   update_interval: 20
   num_steps_per_day: 96
+
+env: 
+  ratio_clip_min_max: [0, 3.0]
+  total_price_clip_min_max: [0.5, 2.0]
+  scaling_factor: 0.01
+  discomfort_weight: 120.0

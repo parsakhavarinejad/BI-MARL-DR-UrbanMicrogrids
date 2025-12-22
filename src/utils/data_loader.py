@@ -170,6 +170,6 @@ class SmartGridDataLoader:
 
 # -------- Test the script --------
 if __name__ == "__main__":
-    data_loader = SmartGridDataLoader(r"data\\IDEAL\\panel_env_ready_15m.csv.gz")
+    data_loader = SmartGridDataLoader("data\\IDEAL\\panel_env_ready_15m.csv.gz")
     episode = data_loader.get_episode(index=1)
     print(episode.shape)

@@ -38,7 +38,7 @@ class SmartGridEnv(gym.Env):
       concatenating all agent observations.
     """
 
-    def __init__(self, data_loader):
+    def __init__(self, data_loader, ratio_clip, total_price_clip, state_dim, scaling_factor, discomfort_weight):
         """
         Initialize the environment.
 
@@ -57,7 +57,7 @@ class SmartGridEnv(gym.Env):
         )
 
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.num_agents, 8), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(self.num_agents, state_dim), dtype=np.float32
         )
 
         self.current_step = 0
@@ -67,7 +67,13 @@ class SmartGridEnv(gym.Env):
             self.data_loader.daily_episodes[:, :, :, 0].sum(axis=1).mean(axis=0)
         )
 
-        self.total_steps = 96
+        self.total_steps = 96   
+
+        self.ratio_clip = ratio_clip
+        self.total_price_clip = total_price_clip
+        self.state_dim = state_dim
+        self.scaling_factor = scaling_factor
+        self.discomfort_weight = discomfort_weight
 
     def reset(self, seed=None, options=None):
         """
@@ -115,9 +121,11 @@ class SmartGridEnv(gym.Env):
         """
         den = max(self.expected_load[self.current_step], 1e-3)
         ratio = total_grid_load / den
-        ratio = np.clip(ratio, 0.0, 3.0)
+        ratio_clip = self.ratio_clip
+        ratio = np.clip(ratio, ratio_clip[0], ratio_clip[1])
         total_price = base_price * (1 + alpha * ratio**2)
-        total_price = np.clip(total_price, 0.5 * base_price, 2.0 * base_price)
+        total_price_clip = self.total_price_clip
+        total_price = np.clip(total_price, total_price_clip[0] * base_price, total_price_clip[1] * base_price)
         return total_price
 
     def step(self, actions):
@@ -158,8 +166,8 @@ class SmartGridEnv(gym.Env):
 
         current_price = self._get_dynamic_price(total_grid_load, current_base_price)
 
-        scaling_factor = 1 / 100
-        discomfort_weight = 120.0
+        scaling_factor = self.scaling_factor
+        discomfort_weight = self.discomfort_weight
 
         rewards = []
         for agent in range(self.num_agents):
@@ -174,7 +182,7 @@ class SmartGridEnv(gym.Env):
         next_obs = (
             self._get_obs()
             if not done
-            else np.zeros((self.num_agents, 8), dtype=np.float32)
+            else np.zeros((self.num_agents, self.state_dim), dtype=np.float32)
         )
 
         return next_obs, np.array(rewards, dtype=np.float32), done, False, {}

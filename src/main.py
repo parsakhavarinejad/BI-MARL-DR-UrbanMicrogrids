@@ -8,7 +8,6 @@ from marl.agents.mappo_agent import MAPPOAgent
 from utils.config_parser import Config
 from utils.save_config import save_config_csv
 from utils.train_logger import TrainingLogger
-from utils.visualization import save_paper_visualizations
 
 
 def parse_args():
@@ -50,7 +49,14 @@ def main():
     save_config_csv(cfg, logger.save_dir)
 
     data_loader = SmartGridDataLoader(cfg.data_path)
-    env = SmartGridEnv(data_loader, cfg.env_ratio_clip_min_max, cfg.env_total_price_clip_min_max, cfg.actor_state_dim, cfg.env_scaling_factor, cfg.env_discomfort_weight)
+    env = SmartGridEnv(
+        data_loader,
+        cfg.env_ratio_clip_min_max,
+        cfg.env_total_price_clip_min_max,
+        cfg.actor_state_dim,
+        cfg.env_scaling_factor,
+        cfg.env_discomfort_weight,
+    )
 
     mappo_agent = MAPPOAgent(
         state_dim=cfg.actor_state_dim,
@@ -61,7 +67,7 @@ def main():
         K_epochs=cfg.k_epochs,
         gamma=cfg.gamma,
         eps_clip=cfg.eps_clip,
-        entropy_coeff=cfg.agent_entropy_coeff
+        entropy_coeff=cfg.agent_entropy_coeff,
     )
 
     print(f"Start training MAPPO Agent | Saving to {logger.save_dir}")
@@ -92,17 +98,17 @@ def main():
             logger.save_data()
 
     print("Training Complete. Starting Evaluation...")
-    
+
     from evaluation import evaluate_agent
-    
+
     stats_table = evaluate_agent(mappo_agent, env, num_episodes=100)
-    
-    print("\n" + "="*50)
+
+    print("\n" + "=" * 50)
     print("FINAL RESULTS FOR PAPER")
-    print("="*50)
+    print("=" * 50)
     print(stats_table.to_string(index=False, float_format="%.2f"))
-    print("="*50)
-    
+    print("=" * 50)
+
     stats_table.to_csv(f"{logger.save_dir}/final_paper_results.csv", index=False)
 
 

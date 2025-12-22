@@ -35,7 +35,7 @@ class MAPPOAgent:
         K_epochs,
         gamma,
         eps_clip,
-        entropy_coeff
+        entropy_coeff,
     ):
         """
         Initialize actor/critic networks, optimizers, and training hyperparameters.
@@ -120,6 +120,22 @@ class MAPPOAgent:
 
         return action.cpu().numpy(), log_prob.cpu().numpy(), pre_tanh.cpu().numpy()
 
+    def actions_deterministic(self, state):
+        """
+        Deterministic (mean) action for evaluation:
+        action = tanh(mu(state))
+        Returns action, dummy_logprob, dummy_pre_tanh
+        """
+        state_t = torch.FloatTensor(state).to(self.device)
+        with torch.no_grad():
+            mu, _std = self.actor_network(state_t)
+            pre_tanh = mu
+            action = torch.tanh(pre_tanh)
+
+        logprob = torch.zeros(action.shape[0], device=self.device)
+
+        return action.cpu().numpy(), logprob.cpu().numpy(), pre_tanh.cpu().numpy()
+
     def update(self):
         """
         Update actor and critic using PPO-style clipped objective.
@@ -188,7 +204,7 @@ class MAPPOAgent:
             critic_loss = 0.5 * F.mse_loss(new_value, flat_rewards)
             entropy_bonus = entropy.mean()
 
-            entropy_coeff = self.agent.entropy_coeff
+            entropy_coeff = self.agent_entropy_coeff
             loss = actor_loss + critic_loss - entropy_coeff * entropy_bonus
 
             self.actor_opt.zero_grad()

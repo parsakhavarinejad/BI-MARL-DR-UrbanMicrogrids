@@ -38,7 +38,15 @@ class SmartGridEnv(gym.Env):
       concatenating all agent observations.
     """
 
-    def __init__(self, data_loader, ratio_clip, total_price_clip, state_dim, scaling_factor, discomfort_weight):
+    def __init__(
+        self,
+        data_loader,
+        ratio_clip,
+        total_price_clip,
+        state_dim,
+        scaling_factor,
+        discomfort_weight,
+    ):
         """
         Initialize the environment.
 
@@ -57,7 +65,10 @@ class SmartGridEnv(gym.Env):
         )
 
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.num_agents, state_dim), dtype=np.float32
+            low=-np.inf,
+            high=np.inf,
+            shape=(self.num_agents, state_dim),
+            dtype=np.float32,
         )
 
         self.current_step = 0
@@ -67,7 +78,7 @@ class SmartGridEnv(gym.Env):
             self.data_loader.daily_episodes[:, :, :, 0].sum(axis=1).mean(axis=0)
         )
 
-        self.total_steps = 96   
+        self.total_steps = 96
 
         self.ratio_clip = ratio_clip
         self.total_price_clip = total_price_clip
@@ -125,7 +136,11 @@ class SmartGridEnv(gym.Env):
         ratio = np.clip(ratio, ratio_clip[0], ratio_clip[1])
         total_price = base_price * (1 + alpha * ratio**2)
         total_price_clip = self.total_price_clip
-        total_price = np.clip(total_price, total_price_clip[0] * base_price, total_price_clip[1] * base_price)
+        total_price = np.clip(
+            total_price,
+            total_price_clip[0] * base_price,
+            total_price_clip[1] * base_price,
+        )
         return total_price
 
     def step(self, actions):

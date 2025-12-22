@@ -50,7 +50,7 @@ def main():
     save_config_csv(cfg, logger.save_dir)
 
     data_loader = SmartGridDataLoader(cfg.data_path)
-    env = SmartGridEnv(data_loader)
+    env = SmartGridEnv(data_loader, cfg.env_ratio_clip_min_max, cfg.env_total_price_clip_min_max, cfg.actor_state_dim, cfg.env_scaling_factor, cfg.env_discomfort_weight)
 
     mappo_agent = MAPPOAgent(
         state_dim=cfg.actor_state_dim,
@@ -61,6 +61,7 @@ def main():
         K_epochs=cfg.k_epochs,
         gamma=cfg.gamma,
         eps_clip=cfg.eps_clip,
+        entropy_coeff=cfg.agent_entropy_coeff
     )
 
     print(f"Start training MAPPO Agent | Saving to {logger.save_dir}")

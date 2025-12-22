@@ -25,3 +25,10 @@ class Config:
         self.num_steps_per_day = int(cfg["main"]["num_steps_per_day"])
 
         self.data_path = cfg["data"]["path"]
+
+        self.agent_entropy_coeff = float(cfg['agent']["entropy_coeff"])
+
+        self.env_ratio_clip_min_max = list(cfg['env']['ratio_clip_min_max'])
+        self.env_total_price_clip_min_max = list(cfg['env']['total_price_clip_min_max'])
+        self.env_scaling_factor = float(cfg['env']['scaling_factor'])
+        self.env_discomfort_weight = float(cfg['env']['discomfort_weight'])

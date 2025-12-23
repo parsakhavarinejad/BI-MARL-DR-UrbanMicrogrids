@@ -20,7 +20,7 @@ data:
 
 
 main:
-  num_episodes: 2500
+  num_episodes: 1250
   num_agents: 12
   update_interval: 19
   num_steps_per_day: 96
@@ -29,4 +29,4 @@ env:
   ratio_clip_min_max: [0, 3.0]
   total_price_clip_min_max: [0.5, 2.0]
   scaling_factor: 0.01
-  discomfort_weight: 40
+  discomfort_weight: 60

@@ -187,8 +187,8 @@ class SmartGridEnv(gym.Env):
         rewards = []
         for agent in range(self.num_agents):
             cost = actual_load[agent] * current_price[agent]
-            discomfort = (actions[agent] ** 2) * current_base_load[agent] * discomfort_weight
-            # discomfort = (actions[agent]) ** 2 * discomfort_weight
+            # discomfort = (actions[agent] ** 2) * current_base_load[agent] * discomfort_weight
+            discomfort = (actions[agent]) ** 2 * discomfort_weight
             reward = -(cost + discomfort) * scaling_factor
             rewards.append(reward)
 

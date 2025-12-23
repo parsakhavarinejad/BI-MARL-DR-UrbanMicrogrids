@@ -181,15 +181,15 @@ class SmartGridEnv(gym.Env):
 
         current_price = self._get_dynamic_price(total_grid_load, current_base_price)
 
-        scaling_factor = self.scaling_factor
-        discomfort_weight = self.discomfort_weight
-
         rewards = []
         for agent in range(self.num_agents):
-            cost = actual_load[agent] * current_price[agent]
-            # discomfort = (actions[agent] ** 2) * current_base_load[agent] * discomfort_weight
-            discomfort = (actions[agent]) ** 2 * discomfort_weight
-            reward = -(cost + discomfort) * scaling_factor
+            # cost = actual_load[agent] * current_price[agent]
+            # discomfort = (actions[agent]) ** 2 * discomfort_weight
+            # reward = -(cost + discomfort) * scaling_factor
+
+            norm_cost = (1 + actions[agent]) * current_price[agent]
+            norm_discomfort = (actions[agent] ** 2) * self.discomfort_weight
+            reward = -(norm_cost + norm_discomfort) * self.scaling_factor
             rewards.append(reward)
 
         self.current_step += 1

@@ -1,6 +1,7 @@
 import csv
 import os
 
+
 def flatten_dict(d, parent_key="", sep="."):
     items = []
     for k, v in d.items():
@@ -10,6 +11,7 @@ def flatten_dict(d, parent_key="", sep="."):
         else:
             items.append((new_key, v))
     return dict(items)
+
 
 def save_config_csv(cfg, save_dir, filename="config.csv"):
     if hasattr(cfg, "config"):

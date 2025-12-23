@@ -11,6 +11,7 @@ from utils.train_logger import TrainingLogger
 from utils.visualization import save_paper_visualizations
 
 
+
 def parse_args():
     """
     Parse command-line arguments.
@@ -18,9 +19,10 @@ def parse_args():
     Returns
     -------
     argparse.Namespace
-        Parsed arguments containing the config path.
+        Parsed arguments containing the config path and verbosity level.
     """
-    parser = argparse.ArgumentParser(description="Input config directory")
+    parser = argparse.ArgumentParser(description="Run experiment with config file")
+
     parser.add_argument(
         "--config",
         "-c",
@@ -28,6 +30,16 @@ def parse_args():
         default="configs/config.yaml",
         help="Path to YAML configuration file",
     )
+
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        type=int,
+        choices=[0, 1],
+        default=0,
+        help="Whether to show logs: 0 = no logs, 1 = show logs",
+    )
+
     return parser.parse_args()
 
 
@@ -44,13 +56,22 @@ def main():
     """
     args = parse_args()
     cfg = Config(args.config)
+    verbose = args.verbose
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    logger = TrainingLogger(save_dir=f"results/run_{timestamp}")
+    save_dir = f"results/run_{timestamp}"
+    logger = TrainingLogger(save_dir=save_dir)
 
     save_config_csv(cfg, logger.save_dir)
 
     data_loader = SmartGridDataLoader(cfg.data_path)
-    env = SmartGridEnv(data_loader, cfg.env_ratio_clip_min_max, cfg.env_total_price_clip_min_max, cfg.actor_state_dim, cfg.env_scaling_factor, cfg.env_discomfort_weight)
+    env = SmartGridEnv(
+        data_loader,
+        cfg.env_ratio_clip_min_max,
+        cfg.env_total_price_clip_min_max,
+        cfg.actor_state_dim,
+        cfg.env_scaling_factor,
+        cfg.env_discomfort_weight,
+    )
 
     mappo_agent = MAPPOAgent(
         state_dim=cfg.actor_state_dim,
@@ -61,10 +82,11 @@ def main():
         K_epochs=cfg.k_epochs,
         gamma=cfg.gamma,
         eps_clip=cfg.eps_clip,
-        entropy_coeff=cfg.agent_entropy_coeff
+        entropy_coeff=cfg.agent_entropy_coeff,
     )
 
-    print(f"Start training MAPPO Agent | Saving to {logger.save_dir}")
+    if verbose == 1:
+        print(f"Start training MAPPO Agent | Saving to {logger.save_dir}")
 
     for episode in range(cfg.num_episodes):
         obs, _ = env.reset()
@@ -91,18 +113,21 @@ def main():
             logger.save_plots()
             logger.save_data()
 
-    print("Training Complete. Starting Evaluation...")
-    
+    if verbose == 1:
+        print("Training Complete. Starting Evaluation...")
+
     from evaluation import evaluate_agent
-    
+
     stats_table = evaluate_agent(mappo_agent, env, num_episodes=100)
-    
-    print("\n" + "="*50)
-    print("FINAL RESULTS FOR PAPER")
-    print("="*50)
-    print(stats_table.to_string(index=False, float_format="%.2f"))
-    print("="*50)
-    
+    save_paper_visualizations(mappo_agent, env, save_dir)
+
+    if verbose == 1:
+        print("\n" + "=" * 50)
+        print("FINAL RESULTS FOR PAPER")
+        print("=" * 50)
+        print(stats_table.to_string(index=False, float_format="%.2f"))
+        print("=" * 50)
+
     stats_table.to_csv(f"{logger.save_dir}/final_paper_results.csv", index=False)
 
 

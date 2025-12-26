@@ -10,7 +10,7 @@ def evaluate_agent(agent, env, num_episodes=50):
 
     Assumptions:
     - env.step() accepts the same action shape returned by agent.actions(obs)
-    - env._get_obs_raw() returns an array shaped (n_agents, n_features) where:
+    - env._get_obs_raw_norm() returns an array shaped (n_agents, n_features) where:
         raw[:, 0] = baseline load at current step
         raw[:, 1] = base price signal at current step
     - env._get_dynamic_price(total_grid_load, base_price_vector) returns price vector per agent
@@ -43,7 +43,7 @@ def evaluate_agent(agent, env, num_episodes=50):
             actions, _, _ = agent.actions(obs)
 
             # 2) Read raw baseline signals for THIS step
-            raw = env._get_obs_raw()
+            raw = env._get_obs_raw_norm()
             current_base_load = raw[:, 0].copy()
             current_base_price = raw[:, 1].copy()
 
@@ -59,8 +59,8 @@ def evaluate_agent(agent, env, num_episodes=50):
             total_grid_load_base = float(np.sum(current_base_load))
             total_grid_load_opt = float(np.sum(actual_load))
 
-            price_base_vec = env._get_dynamic_price(total_grid_load_base, current_base_price)
-            price_opt_vec = env._get_dynamic_price(total_grid_load_opt, current_base_price)
+            price_base_vec = env._get_dynamic_price_real(total_grid_load_base, current_base_price)
+            price_opt_vec = env._get_dynamic_price_real(total_grid_load_opt, current_base_price)
 
             # 6) Step environment using the SAME actions used in logging
             obs, _, terminated, truncated, _ = env.step(env_actions)

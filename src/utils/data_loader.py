@@ -2,20 +2,23 @@ import pandas as pd
 import numpy as np
 
 class SmartGridDataLoader:
-    def __init__(self, data_path, num_agents=25):
+    def __init__(self, data_path, num_agents=25, verbose=1):
         print(f"Loading the data from {data_path}")
-        self.df = pd.read_csv(data_path, compression="gzip")
+        self.df = pd.read_csv(data_path, compression="gzip", low_memory=False)
         self.target_agents = num_agents
 
-        print(f"Selecting the top {num_agents} agents with the most data...")
+        self.verbose = verbose
+        if self.verbose:
+            print(f"Selecting the top {num_agents} agents with the most data...")
         
         home_counts = self.df.groupby("homeid")["date"].nunique()
         best_homes = home_counts.sort_values(ascending=False).head(num_agents).index.tolist()
         
         self.df = self.df[self.df["homeid"].isin(best_homes)].copy()
-        print(f"Kept agents: {best_homes}")
+        if self.verbose:
+            print(f"Kept agents: {best_homes}")
 
-        print("Calculating common dates for these best agents...")
+            print("Calculating common dates for these best agents...")
         home_dates = self.df.groupby("homeid")["date"].unique()
         
         if len(home_dates) > 0:
@@ -24,7 +27,8 @@ class SmartGridDataLoader:
                 common_dates = common_dates.intersection(dates)
             
             common_dates = sorted(list(common_dates))
-            print(f"Found {len(common_dates)} days where ALL {num_agents} best agents are present.")
+            if self.verbose:
+                print(f"Found {len(common_dates)} days where ALL {num_agents} best agents are present.")
             
             self.df = self.df[self.df["date"].isin(common_dates)].copy()
         else:
@@ -69,7 +73,8 @@ class SmartGridDataLoader:
         self.df = self.df.sort_values(by=["date", "homeid", "ts"])
         self.date_unique = sorted(self.df["date"].unique())
 
-        print(f"There are {len(self.home_unique)} homes in total and {len(self.date_unique)} days!")
+        if self.verbose:
+            print(f"There are {len(self.home_unique)} homes in total and {len(self.date_unique)} days!")
 
         self.feature_cols = [
             "e_kwh_norm",       
@@ -92,8 +97,8 @@ class SmartGridDataLoader:
     def _process_episodes(self):
         episode_len = 96
         valid_episode = []
-        
-        print(f"Processing {len(self.date_unique)} episodes...")
+        if self.verbose:
+            print(f"Processing {len(self.date_unique)} episodes...")
         
         gb_date = self.df.groupby("date")
         
@@ -112,8 +117,9 @@ class SmartGridDataLoader:
                 valid_episode.append(day_tensor)
 
         self.daily_episodes = np.array(valid_episode)
-        print(f"Final Dataset: {len(self.daily_episodes)} clean episodes.")
-        print(f"Tensor Shape: {self.daily_episodes.shape}")
+        if self.verbose:
+            print(f"Final Dataset: {len(self.daily_episodes)} clean episodes.")
+            print(f"Tensor Shape: {self.daily_episodes.shape}")
 
     def get_episode(self, index):
         return self.daily_episodes[index]

@@ -10,7 +10,10 @@ from utils.save_config import save_config_csv
 from utils.train_logger import TrainingLogger
 from utils.visualization import save_paper_visualizations
 
+import warnings
+from pandas.errors import DtypeWarning
 
+warnings.filterwarnings("ignore", category=DtypeWarning)
 
 def parse_args():
     """
@@ -71,7 +74,8 @@ def main():
         cfg.actor_state_dim,
         cfg.env_scaling_factor,
         cfg.env_discomfort_weight,
-        cfg.num_agents
+        cfg.num_agents,
+        cfg.num_steps_per_day
     )
 
     mappo_agent = MAPPOAgent(

@@ -53,19 +53,15 @@ def save_paper_visualizations(agent, env, save_dir="results"):
         actions, _, _ = agent.actions(obs)
 
         # Get Raw State
-        raw_state = env._get_obs_raw()
+        raw_state = env._get_obs_raw_norm()
         current_base_load = raw_state[:, 0].copy()
-        current_base_price = raw_state[:, 1].copy()  # <--- This is the FLAT Base Price
-
+        current_base_price = raw_state[:, 1].copy()  
         # Calculate Actual Load
         clipped_actions = np.clip(actions.reshape(-1), -1.0, 1.0)
         actual_load = current_base_load * (1 + clipped_actions)
 
-        # --- NEW: CALCULATE DYNAMIC PRICE FOR PLOTTING ---
         total_grid_load = np.sum(actual_load)
-        # We manually call the env's pricing function to get the REAL price
-        dynamic_price = env._get_dynamic_price(total_grid_load, current_base_price)
-        # -------------------------------------------------
+        dynamic_price = env._get_dynamic_price_real(total_grid_load, current_base_price)
 
         obs, rewards, done, truncated, _ = env.step(actions)
 

@@ -2,17 +2,17 @@ networks:
   actor:
     state_dim: 11 # num_features
     action_dim: 1
-    lr: 8e-5
+    lr: 2e-4
 
   critic:
     global_state_dim: 275 # 12 * 8 = 96 (num_houses * num_features)
-    lr: 5e-5
+    lr: 8e-5
 
 agent:
-  k_epochs: 14
+  k_epochs: 21
   gamma: 0.99
-  eps_clip: 0.36
-  entropy_coeff: 0.0044
+  eps_clip: 0.25
+  entropy_coeff: 4e-4
 
 
 data:
@@ -20,13 +20,13 @@ data:
 
 
 main:
-  num_episodes: 1250
+  num_episodes: 2000
   num_agents: 25
-  update_interval: 19
+  update_interval: 17
   num_steps_per_day: 96
 
 env: 
   ratio_clip_min_max: [0, 3.0]
   total_price_clip_min_max: [0.5, 2.0]
   scaling_factor: 0.01
-  discomfort_weight: 60
+  discomfort_weight: 10

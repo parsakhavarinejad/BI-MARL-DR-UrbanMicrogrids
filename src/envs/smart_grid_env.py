@@ -46,6 +46,7 @@ class SmartGridEnv(gym.Env):
         state_dim,
         scaling_factor,
         discomfort_weight,
+        num_agents
     ):
         """
         Initialize the environment.
@@ -58,7 +59,7 @@ class SmartGridEnv(gym.Env):
         """
         super().__init__()
         self.data_loader = data_loader
-        self.num_agents = 12
+        self.num_agents = num_agents
 
         self.action_space = spaces.Box(
             low=-1.0, high=1.0, shape=(self.num_agents,), dtype=np.float32

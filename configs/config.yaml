@@ -5,7 +5,7 @@ networks:
     lr: 8e-5
 
   critic:
-    global_state_dim: 550 # 12 * 8 = 96 (num_houses * num_features)
+    global_state_dim: 275 # 12 * 8 = 96 (num_houses * num_features)
     lr: 5e-5
 
 agent:

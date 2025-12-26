@@ -71,6 +71,7 @@ def main():
         cfg.actor_state_dim,
         cfg.env_scaling_factor,
         cfg.env_discomfort_weight,
+        cfg.num_agents
     )
 
     mappo_agent = MAPPOAgent(

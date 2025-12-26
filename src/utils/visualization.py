@@ -178,3 +178,53 @@ def save_paper_visualizations(agent, env, save_dir="results"):
     )
     plt.close()
     print(f"[Plot] Saved Community Plot to {save_dir}")
+
+
+
+def plot_rich_vs_poor(agent, env, save_dir):
+    obs, _ = env.reset()
+    
+    incomes = obs[:, 9]
+    rich_id = np.argmax(incomes) 
+    poor_id = np.argmin(incomes) 
+    
+    print(f"Rich Agent ID: {rich_id} (Income: {incomes[rich_id]:.2f})")
+    print(f"Poor Agent ID: {poor_id} (Income: {incomes[poor_id]:.2f})")
+    
+    rich_actions = []
+    poor_actions = []
+    prices = []
+    
+    steps = 96
+    for _ in range(steps):
+        actions, _, _ = agent.actions(obs)
+        
+        rich_actions.append(actions[rich_id])
+        poor_actions.append(actions[poor_id])
+        
+        prices.append(obs[0, 1]) 
+        
+        obs, _, done, _, _ = env.step(actions)
+        if done: break
+
+    plt.figure(figsize=(12, 6))
+    
+    ax1 = plt.gca()
+    ax1.fill_between(range(steps), prices, color='gray', alpha=0.1, label="Electricity Price")
+    ax1.set_ylabel("Normalized Price")
+    
+    ax2 = ax1.twinx()
+    ax2.plot(poor_actions, color='red', linewidth=2, label=f"Poor Agent (Income {incomes[poor_id]:.1f})")
+    ax2.plot(rich_actions, color='green', linewidth=2, linestyle='--', label=f"Rich Agent (Income {incomes[rich_id]:.1f})")
+    
+    ax2.set_ylabel("Action (Load Shift)")
+    ax2.set_ylim(-1.0, 1.0)
+    
+    plt.title("Behavioral Analysis: Income Heterogeneity")
+    lines, labels = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    plt.legend(lines + lines2, labels + labels2, loc='upper left')
+
+    plt.savefig(
+        os.path.join(save_dir, "high_low_income_comparison.png"), dpi=300
+    )

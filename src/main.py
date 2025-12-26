@@ -8,7 +8,7 @@ from marl.agents.mappo_agent import MAPPOAgent
 from utils.config_parser import Config
 from utils.save_config import save_config_csv
 from utils.train_logger import TrainingLogger
-from utils.visualization import save_paper_visualizations
+from utils.visualization import plot_rich_vs_poor, save_paper_visualizations
 
 import warnings
 from pandas.errors import DtypeWarning
@@ -125,6 +125,7 @@ def main():
 
     stats_table = evaluate_agent(mappo_agent, env, num_episodes=100)
     save_paper_visualizations(mappo_agent, env, save_dir)
+    plot_rich_vs_poor(mappo_agent, env, save_dir)
 
     if verbose == 1:
         print("\n" + "=" * 50)

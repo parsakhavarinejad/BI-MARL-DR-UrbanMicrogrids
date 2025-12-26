@@ -1,0 +1,1 @@
+1. In this experiment, heterogeneity of the data is considered on dynamic reward.

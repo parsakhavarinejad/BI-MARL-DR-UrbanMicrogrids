@@ -1,11 +1,11 @@
 networks:
   actor:
-    state_dim: 8 # num_features
+    state_dim: 11 # num_features
     action_dim: 1
     lr: 8e-5
 
   critic:
-    global_state_dim: 96 # 12 * 8 (num_houses * num_features)
+    global_state_dim: 550 # 12 * 8 = 96 (num_houses * num_features)
     lr: 5e-5
 
 agent:
@@ -16,12 +16,12 @@ agent:
 
 
 data:
-  path: "data\\IDEAL\\panel_env_ready_15m.csv.gz"
+  path: "data\\IDEAL\\panel_env_ready_15m_50agents.csv.gz"
 
 
 main:
   num_episodes: 1250
-  num_agents: 12
+  num_agents: 25
   update_interval: 19
   num_steps_per_day: 96
 

@@ -63,7 +63,7 @@ def main():
 
     save_config_csv(cfg, logger.save_dir)
 
-    data_loader = SmartGridDataLoader(cfg.data_path)
+    data_loader = SmartGridDataLoader(cfg.data_path, cfg.num_agents)
     env = SmartGridEnv(
         data_loader,
         cfg.env_ratio_clip_min_max,

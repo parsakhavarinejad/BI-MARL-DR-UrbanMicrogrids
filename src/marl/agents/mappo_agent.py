@@ -31,7 +31,6 @@ class MAPPOAgent:
             action, log_prob, _, pre_tanh = self.actor.sample(state_tensor)
         return action.cpu().numpy(), log_prob.cpu().numpy(), pre_tanh.cpu().numpy()
     
-    # Alias for visualization compatibility
     def actions(self, state):
         return self.act(state)
 

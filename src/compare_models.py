@@ -12,7 +12,8 @@ from marl.agents.mappo_agent import MAPPOAgent
 from marl.agents.ippo_agent import IPPOAgent
 from marl.agents.maddpg_agent import MADDPGAgent
 from marl.agents.rule_based_agent import RuleBasedAgent
-from marl.agents.tou_agent import TOUAgent # Import TOU
+from marl.agents.tou_agent import TOUAgent 
+from marl.agents.matd3_agent import MATD3Agent
 
 def load_agent(algo, base_path, cfg):
     if algo == "mappo":
@@ -23,6 +24,8 @@ def load_agent(algo, base_path, cfg):
                           cfg.k_epochs, cfg.gamma, cfg.eps_clip, cfg.agent_entropy_coeff)
     elif algo == "maddpg":
         agent = MADDPGAgent(cfg.actor_state_dim, cfg.actor_action_dim, cfg.critic_global_state_dim)
+    elif algo == "matd3":
+        agent = MATD3Agent(cfg.actor_state_dim, cfg.actor_action_dim, cfg.critic_global_state_dim)
     elif algo == "rule":
         return RuleBasedAgent()
     elif algo == "tou": # Add TOU case
@@ -46,7 +49,7 @@ def main():
     paths = ExperimentPaths(experiment_name=args.exp_name)
     comp_dir = paths.get_comparison_dirs()
 
-    algos = ["rule", "tou", "ippo", "maddpg", "mappo"]
+    algos = ["rule", "tou", "ippo", "maddpg", "mappo", "matd3"]
     
     data_loader = SmartGridDataLoader(cfg.data_path, cfg.num_agents)
     env = SmartGridEnv(data_loader, cfg.env_ratio_clip_min_max, cfg.env_total_price_clip_min_max,

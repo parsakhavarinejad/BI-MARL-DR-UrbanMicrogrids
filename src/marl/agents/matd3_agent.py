@@ -44,14 +44,11 @@ class MATD3Agent:
         self.policy_freq = policy_freq
         self.total_it = 0
 
-        # Actor
         self.actor = ActorNetwork(state_dim, action_dim).to(self.device)
         self.actor_target = ActorNetwork(state_dim, action_dim).to(self.device)
         self.actor_target.load_state_dict(self.actor.state_dict())
         self.actor_optimizer = Adam(self.actor.parameters(), lr=actor_lr)
 
-        # Critics (Twin)
-        # Input: Global State + Joint Actions
         num_agents = global_state_dim // state_dim
         critic_input_dim = global_state_dim + num_agents * action_dim
 
@@ -74,11 +71,10 @@ class MATD3Agent:
         """
         state_tensor = torch.as_tensor(state, dtype=torch.float32, device=self.device)
         with torch.no_grad():
-            mu, _ = self.actor(state_tensor) # ActorNetwork returns mu, std
+            mu, _ = self.actor(state_tensor) 
             action = torch.tanh(mu)
         return action.cpu().numpy(), None, None
 
-    # Alias for compatibility
     def actions(self, state):
         return self.act(state)
 
@@ -100,32 +96,27 @@ class MATD3Agent:
 
         batch_size_curr = states.shape[0]
 
-        # Prepare Global Inputs
         flat_states = states.reshape(batch_size_curr, -1)
         flat_actions = actions.reshape(batch_size_curr, -1)
         flat_next_states = next_states.reshape(batch_size_curr, -1)
 
         with torch.no_grad():
-            # Target Policy Smoothing
             mu_next, _ = self.actor_target(next_states)
             noise = (torch.randn_like(mu_next) * self.policy_noise).clamp(-self.noise_clip, self.noise_clip)
             
             next_action = torch.tanh(mu_next + noise)
             flat_next_action = next_action.reshape(batch_size_curr, -1)
 
-            # Target Q-values
             target_critic_input = torch.cat([flat_next_states, flat_next_action], dim=1)
             target_q1 = self.critic_1_target(target_critic_input)
             target_q2 = self.critic_2_target(target_critic_input)
             target_q = torch.min(target_q1, target_q2)
             
-            # Sum rewards across agents for Cooperative Setting
             total_reward = rewards.sum(dim=1)
             done_mask = dones.any(dim=1, keepdim=True).float()
             
             target_value = total_reward + (1.0 - done_mask) * self.gamma * target_q
 
-        # Current Q-values
         critic_input = torch.cat([flat_states, flat_actions], dim=1)
         current_q1 = self.critic_1(critic_input)
         current_q2 = self.critic_2(critic_input)
@@ -136,21 +127,18 @@ class MATD3Agent:
         critic_loss.backward()
         self.critic_optimizer.step()
 
-        # Delayed Actor Update
         if self.total_it % self.policy_freq == 0:
             mu, _ = self.actor(states)
             curr_actions = torch.tanh(mu)
             flat_curr_actions = curr_actions.reshape(batch_size_curr, -1)
             
             actor_input = torch.cat([flat_states, flat_curr_actions], dim=1)
-            # Maximize Q1
             actor_loss = -self.critic_1(actor_input).mean()
 
             self.actor_optimizer.zero_grad()
             actor_loss.backward()
             self.actor_optimizer.step()
 
-            # Soft Updates
             for param, target_param in zip(self.critic_1.parameters(), self.critic_1_target.parameters()):
                 target_param.data.mul_(1.0 - self.tau)
                 target_param.data.add_(self.tau * param.data)

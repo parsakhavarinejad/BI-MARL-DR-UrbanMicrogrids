@@ -30,7 +30,6 @@ def evaluate_agent(agent, env, num_episodes=50):
         episode_voltage_violations = 0
 
         while not done:
-            # Use 'actions' alias to be safe
             if hasattr(agent, "actions"):
                 actions, _, _ = agent.actions(obs)
             else:

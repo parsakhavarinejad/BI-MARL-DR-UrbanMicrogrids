@@ -16,8 +16,8 @@ def main():
     run_command(f"python src/main.py --algo tou --exp_name {exp_name}")
     
     run_command(f"python src/main.py --algo ippo --exp_name {exp_name}")
-    # run_command(f"python src/main.py --algo maddpg --exp_name {exp_name}")
-    # run_command(f"python src/main.py --algo matd3 --exp_name {exp_name}")
+    run_command(f"python src/main.py --algo maddpg --exp_name {exp_name}")
+    run_command(f"python src/main.py --algo matd3 --exp_name {exp_name}")
     run_command(f"python src/main.py --algo mappo --exp_name {exp_name}")
 
     print("\nRunning Comparison & Generating Tables...")

@@ -5,7 +5,7 @@ from torch.optim import Adam
 import random
 import os
 from marl.networks.actor_network import ActorNetwork
-from marl.networks.critic_network import CriticNetwork
+from marl.networks.q_network import QNetwork
 
 
 class ReplayBuffer:
@@ -52,12 +52,12 @@ class MATD3Agent:
         num_agents = global_state_dim // state_dim
         critic_input_dim = global_state_dim + num_agents * action_dim
 
-        self.critic_1 = CriticNetwork(critic_input_dim).to(self.device)
-        self.critic_2 = CriticNetwork(critic_input_dim).to(self.device)
-        
-        self.critic_1_target = CriticNetwork(critic_input_dim).to(self.device)
-        self.critic_2_target = CriticNetwork(critic_input_dim).to(self.device)
-        
+        self.critic_1 = QNetwork(critic_input_dim, hidden_dims=(256, 256), use_layer_norm=True).to(self.device)
+        self.critic_2 = QNetwork(critic_input_dim, hidden_dims=(256, 256), use_layer_norm=True).to(self.device)
+
+        self.critic_1_target = QNetwork(critic_input_dim, hidden_dims=(256, 256), use_layer_norm=True).to(self.device)
+        self.critic_2_target = QNetwork(critic_input_dim, hidden_dims=(256, 256), use_layer_norm=True).to(self.device)
+
         self.critic_1_target.load_state_dict(self.critic_1.state_dict())
         self.critic_2_target.load_state_dict(self.critic_2.state_dict())
 
@@ -125,6 +125,7 @@ class MATD3Agent:
 
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
+        torch.nn.utils.clip_grad_norm_(list(self.critic_1.parameters()) + list(self.critic_2.parameters()), 1.0)
         self.critic_optimizer.step()
 
         if self.total_it % self.policy_freq == 0:
@@ -134,9 +135,10 @@ class MATD3Agent:
             
             actor_input = torch.cat([flat_states, flat_curr_actions], dim=1)
             actor_loss = -self.critic_1(actor_input).mean()
-
+            
             self.actor_optimizer.zero_grad()
             actor_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 1.0)
             self.actor_optimizer.step()
 
             for param, target_param in zip(self.critic_1.parameters(), self.critic_1_target.parameters()):

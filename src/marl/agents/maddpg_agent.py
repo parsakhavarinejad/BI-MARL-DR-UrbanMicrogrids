@@ -5,8 +5,7 @@ from torch.optim import Adam
 import random
 import os
 from marl.networks.actor_network import ActorNetwork
-from marl.networks.critic_network import CriticNetwork
-
+from marl.networks.q_network import QNetwork
 
 class ReplayBuffer:
     def __init__(self, capacity):
@@ -47,8 +46,12 @@ class MADDPGAgent:
         num_agents = global_state_dim // state_dim
         critic_input_dim = global_state_dim + num_agents * action_dim
 
-        self.critic = CriticNetwork(critic_input_dim).to(self.device)
-        self.critic_target = CriticNetwork(critic_input_dim).to(self.device)
+        num_agents = global_state_dim // state_dim
+        critic_input_dim = global_state_dim + num_agents * action_dim
+
+        self.critic = QNetwork(critic_input_dim, hidden_dims=(256, 256), use_layer_norm=True).to(self.device)
+        self.critic_target = QNetwork(critic_input_dim, hidden_dims=(256, 256), use_layer_norm=True).to(self.device)
+        self.critic_target.load_state_dict(self.critic.state_dict())
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         self.actor_optimizer = Adam(self.actor.parameters(), lr=actor_lr)
@@ -109,6 +112,7 @@ class MADDPGAgent:
         
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 1.0)
         self.critic_optimizer.step()
 
         mu, _ = self.actor(states)
@@ -117,9 +121,10 @@ class MADDPGAgent:
 
         actor_input = torch.cat([flat_states, flat_curr_actions], dim=1)
         actor_loss = -self.critic(actor_input).mean()
-
+        
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 1.0)
         self.actor_optimizer.step()
 
         for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):

@@ -11,14 +11,18 @@ def main():
     print(f"Starting Full Experiment Suite: {exp_name}")
     print("=" * 60)
 
+    # 1. Static Rule (Price Thresholds)
     run_command(f"python src/main.py --algo rule --exp_name {exp_name}")
+
+    # 2. Heuristic TOU (Time of Use) - NEW
+    run_command(f"python src/main.py --algo tou --exp_name {exp_name}")
     
+    # 3. RL Agents
     run_command(f"python src/main.py --algo ippo --exp_name {exp_name}")
-    
-    run_command(f"python src/main.py --algo maddpg --exp_name {exp_name}")
-    
+    # run_command(f"python src/main.py --algo maddpg --exp_name {exp_name}")
     run_command(f"python src/main.py --algo mappo --exp_name {exp_name}")
 
+    # 4. Compare
     print("\nRunning Comparison & Generating Tables...")
     run_command(f"python src/compare_models.py --exp_name {exp_name}")
 

@@ -6,56 +6,32 @@ from torch.optim import Adam
 from marl.networks.actor_network import ActorNetwork
 from marl.networks.critic_network import CriticNetwork
 
-
 class MAPPOAgent:
-    """
-    Multi-Agent PPO agent with a decentralized actor and a centralized critic.
-    """
-
-    def __init__(
-        self,
-        state_dim,
-        action_dim,
-        global_state_dim,
-        actor_lr,
-        critic_lr,
-        epochs,
-        gamma,
-        clip_eps,
-        entropy_coef,
-    ):
+    def __init__(self, state_dim, action_dim, global_state_dim, actor_lr, critic_lr, epochs, gamma, clip_eps, entropy_coef):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
         self.actor = ActorNetwork(state_dim, action_dim).to(self.device)
         self.actor_old = ActorNetwork(state_dim, action_dim).to(self.device)
         self.actor_old.load_state_dict(self.actor.state_dict())
-
         self.critic = CriticNetwork(global_state_dim).to(self.device)
-
         self.actor_optimizer = Adam(self.actor.parameters(), lr=actor_lr)
         self.critic_optimizer = Adam(self.critic.parameters(), lr=critic_lr)
-
         self.epochs = epochs
         self.gamma = gamma
         self.clip_eps = clip_eps
         self.entropy_coef = entropy_coef
-
         self.memory = []
 
+    # Alias for main.py compatibility
     def store(self, action, state, reward, done, log_prob, pre_tanh):
-        # Arguments aligned with main.py call signature
         self.memory.append((state, action, reward, done, log_prob, pre_tanh))
 
     def act(self, state):
-        """
-        Sample a stochastic action from the actor policy.
-        """
         state_tensor = torch.as_tensor(state, dtype=torch.float32, device=self.device)
         with torch.no_grad():
             action, log_prob, _, pre_tanh = self.actor.sample(state_tensor)
         return action.cpu().numpy(), log_prob.cpu().numpy(), pre_tanh.cpu().numpy()
     
-    # Alias for compatibility
+    # Alias for visualization compatibility
     def actions(self, state):
         return self.act(state)
 
@@ -63,27 +39,22 @@ class MAPPOAgent:
         state_tensor = torch.as_tensor(state, dtype=torch.float32, device=self.device)
         with torch.no_grad():
             mu, _ = self.actor(state_tensor)
-            pre_tanh = mu
-            action = torch.tanh(pre_tanh)
+            action = torch.tanh(mu)
         log_prob = torch.zeros(action.shape[0], device=self.device)
-        return action.cpu().numpy(), log_prob.cpu().numpy(), pre_tanh.cpu().numpy()
+        return action.cpu().numpy(), log_prob.cpu().numpy(), mu.cpu().numpy()
 
     def _compute_returns(self, rewards, dones):
         returns = []
         cumulative = 0.0
         for r, d in zip(reversed(rewards), reversed(dones)):
-            if np.any(d):
-                cumulative = 0.0
+            if np.any(d): cumulative = 0.0
             cumulative = r + self.gamma * cumulative
             returns.insert(0, cumulative)
         return np.asarray(returns, dtype=np.float32)
 
     def update(self):
-        if len(self.memory) == 0:
-            return
-
+        if len(self.memory) == 0: return
         states, actions, rewards, dones, old_log_probs, pre_tanhs = zip(*self.memory)
-
         returns = self._compute_returns(rewards, dones)
 
         states_t = torch.as_tensor(np.array(states), dtype=torch.float32, device=self.device)
@@ -92,7 +63,7 @@ class MAPPOAgent:
         pre_tanhs_t = torch.as_tensor(np.array(pre_tanhs), dtype=torch.float32, device=self.device)
 
         batch_size, num_agents, state_dim = states_t.shape
-        action_dim = 1 if pre_tanhs_t.ndim == 1 else pre_tanhs_t.shape[-1]
+        action_dim = 1 
 
         flat_states = states_t.reshape(-1, state_dim)
         flat_returns = returns_t.reshape(-1)
@@ -110,15 +81,11 @@ class MAPPOAgent:
         for _ in range(self.epochs):
             new_log_probs, entropy = self.actor.evaluate_pre_tanh(flat_states, flat_pre_tanhs)
             new_log_probs = new_log_probs.reshape(-1)
-
             ratios = torch.exp(new_log_probs - flat_old_log_probs.detach())
             clipped = torch.clamp(ratios, 1.0 - self.clip_eps, 1.0 + self.clip_eps)
-
             policy_loss = -torch.min(ratios * advantages, clipped * advantages).mean()
-
             values = self.critic(flat_global_states).reshape(-1)
             value_loss = 0.5 * F.mse_loss(values, flat_returns)
-
             loss = policy_loss + value_loss - self.entropy_coef * entropy.mean()
 
             self.actor_optimizer.zero_grad()
@@ -132,8 +99,7 @@ class MAPPOAgent:
 
     def save(self, path):
         directory = os.path.dirname(path)
-        if directory:
-            os.makedirs(directory, exist_ok=True)
+        if directory: os.makedirs(directory, exist_ok=True)
         torch.save(self.actor.state_dict(), f"{path}_actor.pth")
         torch.save(self.critic.state_dict(), f"{path}_critic.pth")
 

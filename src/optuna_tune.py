@@ -70,7 +70,7 @@ def train_short_budget(
     """
     set_global_seeds(seed)
 
-    data_loader = SmartGridDataLoader(cfg.data_path)
+    data_loader = SmartGridDataLoader(cfg.data_path, num_agents=cfg.num_agents, verbose=0)
     env = SmartGridEnv(
         data_loader,
         cfg.env_ratio_clip_min_max,
@@ -78,6 +78,8 @@ def train_short_budget(
         cfg.actor_state_dim,
         cfg.env_scaling_factor,
         hp["discomfort_weight"],
+        cfg.num_agents,
+        cfg.num_steps_per_day
     )
 
     agent = MAPPOAgent(
@@ -164,7 +166,7 @@ def main():
             # PPO/MAPPO core
             "gamma": 0.99, # trial.suggest_float("gamma", 0.92, 0.999),
             "eps_clip": trial.suggest_float("eps_clip", 0.1, 0.4),
-            "k_epochs": trial.suggest_int("k_epochs", 3, 20),
+            "k_epochs": trial.suggest_int("k_epochs", 3, 30),
             "entropy_coeff": trial.suggest_float("entropy_coeff", 0.0, 0.005),
             # training schedule
             "update_interval": trial.suggest_int("update_interval", 15, 20),

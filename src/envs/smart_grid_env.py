@@ -46,6 +46,8 @@ class SmartGridEnv(gym.Env):
         state_dim,
         scaling_factor,
         discomfort_weight,
+        num_agents,
+        num_steps_per_day
     ):
         """
         Initialize the environment.
@@ -58,7 +60,7 @@ class SmartGridEnv(gym.Env):
         """
         super().__init__()
         self.data_loader = data_loader
-        self.num_agents = 12
+        self.num_agents = num_agents
 
         self.action_space = spaces.Box(
             low=-1.0, high=1.0, shape=(self.num_agents,), dtype=np.float32
@@ -78,13 +80,21 @@ class SmartGridEnv(gym.Env):
             self.data_loader.daily_episodes[:, :, :, 0].sum(axis=1).mean(axis=0)
         )
 
-        self.total_steps = 96
+        self.total_steps = num_steps_per_day
 
         self.ratio_clip = ratio_clip
         self.total_price_clip = total_price_clip
         self.state_dim = state_dim
         self.scaling_factor = scaling_factor
         self.discomfort_weight = discomfort_weight
+
+        self.load_clip = float(self.data_loader.load_clip)
+        self.price_min = float(self.data_loader.price_min)
+        self.price_max = float(self.data_loader.price_max)
+
+        self.expected_load_norm = (
+            self.data_loader.daily_episodes[:, :, :, 0].sum(axis=1).mean(axis=0)
+        )
 
     def reset(self, seed=None, options=None):
         """
@@ -112,84 +122,54 @@ class SmartGridEnv(gym.Env):
         self.current_step = 0
         return self._get_obs(), {}
 
-    def _get_dynamic_price(self, total_grid_load, base_price, alpha=0.5):
+    def _get_dynamic_price_real(self, total_grid_load_norm, base_price_real, alpha=0.5):
         """
-        Compute dynamic energy price based on total grid load.
-
-        Parameters
-        ----------
-        total_grid_load : float
-            Total community load at the current time step.
-        base_price : np.ndarray
-            Base price per agent at the current time step, shape (num_agents,).
-        alpha : float, optional
-            Strength of the price response to load (default: 0.5).
-
-        Returns
-        -------
-        np.ndarray
-            Dynamic price per agent, shape (num_agents,).
+        Calculates the REAL dynamic price (in Pence).
+        
+        Args:
+            total_grid_load_norm: The sum of NORMALIZED loads (dimensionless 0-1 scale sum).
+            base_price_real: The BASE price in REAL Pence/kWh.
         """
-        den = max(self.expected_load[self.current_step], 1e-3)
-        ratio = total_grid_load / den
-        ratio_clip = self.ratio_clip
-        ratio = np.clip(ratio, ratio_clip[0], ratio_clip[1])
-        total_price = base_price * (1 + alpha * ratio**2)
-        total_price_clip = self.total_price_clip
-        total_price = np.clip(
-            total_price,
-            total_price_clip[0] * base_price,
-            total_price_clip[1] * base_price,
+        den = max(self.expected_load_norm[self.current_step], 1e-3)
+        
+        ratio = total_grid_load_norm / den
+        ratio = np.clip(ratio, self.ratio_clip[0], self.ratio_clip[1])
+        
+        total_price_real = base_price_real * (1 + alpha * ratio**2)
+        
+        total_price_real = np.clip(
+            total_price_real,
+            self.total_price_clip[0] * base_price_real,
+            self.total_price_clip[1] * base_price_real,
         )
-        return total_price
+        return total_price_real
 
     def step(self, actions):
-        """
-        Apply actions for all agents and advance one time step.
+        raw_norm = self._get_obs_raw_norm()
+        norm_base_load = raw_norm[:, 0]  
+        norm_base_price = raw_norm[:, 1] 
 
-        Parameters
-        ----------
-        actions : np.ndarray
-            Array of actions in [-1, 1] with shape (num_agents,).
-
-        Returns
-        -------
-        next_obs : np.ndarray
-            Next observation, shape (num_agents, 8) while episode is running.
-            If done, returns a zero array (kept for structure compatibility).
-        rewards : np.ndarray
-            Per-agent rewards, shape (num_agents,).
-        done : bool
-            True if the episode finished (end of day).
-        truncated : bool
-            Always False in this environment.
-        info : dict
-            Empty info dict.
-        """
-        raw = self._get_obs_raw()
-        obs = self._get_obs()
-
-        current_base_load = raw[:, 0]
-        current_base_price = raw[:, 1]
+        real_base_load = norm_base_load * self.load_clip
+        real_base_price = norm_base_price * (self.price_max - self.price_min) + self.price_min
 
         actions = np.squeeze(actions)
-
         actions = np.clip(actions, -1.0, 1.0)
 
-        actual_load = current_base_load * (1 + actions)
-        total_grid_load = np.sum(actual_load, axis=0)
+        real_actual_load = real_base_load * (1 + actions)
+        
+        norm_actual_load = norm_base_load * (1 + actions)
+        total_grid_load_norm = np.sum(norm_actual_load, axis=0)
 
-        current_price = self._get_dynamic_price(total_grid_load, current_base_price)
+        real_dynamic_price = self._get_dynamic_price_real(total_grid_load_norm, real_base_price)
 
+        income_feature = raw_norm[:, 9]
         rewards = []
-        for agent in range(self.num_agents):
-            # cost = actual_load[agent] * current_price[agent]
-            # discomfort = (actions[agent]) ** 2 * discomfort_weight
-            # reward = -(cost + discomfort) * scaling_factor
+        for i in range(self.num_agents):
+            cost_pence = real_actual_load[i] * real_dynamic_price[i]
+            agent_specific_weight = self.discomfort_weight * (0.5 + income_feature[i])
 
-            norm_cost = (1 + actions[agent]) * current_price[agent]
-            norm_discomfort = (actions[agent] ** 2) * self.discomfort_weight
-            reward = -(norm_cost + norm_discomfort) * self.scaling_factor
+            discomfort = (actions[i] ** 2) * agent_specific_weight
+            reward = -(cost_pence + discomfort) * self.scaling_factor
             rewards.append(reward)
 
         self.current_step += 1
@@ -205,27 +185,18 @@ class SmartGridEnv(gym.Env):
 
     def _get_obs(self):
         """
-        Fetch the observation at the current time step.
-
-        Returns
-        -------
-        np.ndarray
-            Observation matrix with shape (num_agents, 8).
+        Returns Observation for Agent.
+        Data is already [0, 1]. We scale it to [-1, 1] for better tanh performance.
         """
-        obs = self._get_obs_raw().copy()
-        load_clip = float(self.data_loader.load_clip)
-        obs[:, 0] = np.clip(obs[:, 0], 0.0, load_clip) / (load_clip + 1e-6)
-        obs[:, 0] = 2.0 * obs[:, 0] - 1.0
+        obs = self._get_obs_raw_norm().copy()
 
-        pmin = float(self.data_loader.price_min)
-        pmax = float(self.data_loader.price_max)
-        obs[:, 1] = np.clip(obs[:, 1], pmin, pmax)
-        obs[:, 1] = (obs[:, 1] - pmin) / (pmax - pmin + 1e-6)
+        obs[:, 0] = 2.0 * obs[:, 0] - 1.0
         obs[:, 1] = 2.0 * obs[:, 1] - 1.0
 
         return obs.astype(np.float32)
 
-    def _get_obs_raw(self):
+    def _get_obs_raw_norm(self):
+        """Returns the [0, 1] normalized data directly from the loader."""
         return self.day_data[:, self.current_step, :].astype(np.float32)
 
 

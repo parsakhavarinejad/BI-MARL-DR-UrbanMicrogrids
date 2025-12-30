@@ -8,9 +8,12 @@ from marl.agents.mappo_agent import MAPPOAgent
 from utils.config_parser import Config
 from utils.save_config import save_config_csv
 from utils.train_logger import TrainingLogger
-from utils.visualization import save_paper_visualizations
+from utils.visualization import plot_rich_vs_poor, save_paper_visualizations
 
+import warnings
+from pandas.errors import DtypeWarning
 
+warnings.filterwarnings("ignore", category=DtypeWarning)
 
 def parse_args():
     """
@@ -63,7 +66,7 @@ def main():
 
     save_config_csv(cfg, logger.save_dir)
 
-    data_loader = SmartGridDataLoader(cfg.data_path)
+    data_loader = SmartGridDataLoader(cfg.data_path, cfg.num_agents)
     env = SmartGridEnv(
         data_loader,
         cfg.env_ratio_clip_min_max,
@@ -71,6 +74,8 @@ def main():
         cfg.actor_state_dim,
         cfg.env_scaling_factor,
         cfg.env_discomfort_weight,
+        cfg.num_agents,
+        cfg.num_steps_per_day
     )
 
     mappo_agent = MAPPOAgent(
@@ -120,6 +125,7 @@ def main():
 
     stats_table = evaluate_agent(mappo_agent, env, num_episodes=100)
     save_paper_visualizations(mappo_agent, env, save_dir)
+    plot_rich_vs_poor(mappo_agent, env, save_dir)
 
     if verbose == 1:
         print("\n" + "=" * 50)

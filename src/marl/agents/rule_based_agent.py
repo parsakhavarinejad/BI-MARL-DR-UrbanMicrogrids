@@ -1,31 +1,39 @@
 import numpy as np
 
+
 class RuleBasedAgent:
+    """
+    Deterministic rule-based agent that selects actions based on thresholded price signals.
+    """
+
     def __init__(self, high_price_threshold=0.7, low_price_threshold=0.3):
-        self.high_thresh = high_price_threshold
-        self.low_thresh = low_price_threshold
+        """
+        Initialize price thresholds that determine agent behavior.
+        """
+        self.high_threshold = high_price_threshold
+        self.low_threshold = low_price_threshold
 
     def actions(self, state):
         """
-        State is (num_agents, num_features).
-        Assumes feature 1 is 'price_norm' (normalized 0-1).
+        Compute actions for each agent based on normalized price values.
         """
-        # Extract price (assuming 2nd feature at index 1 is price)
         prices = state[:, 1]
-        
-        actions = []
-        for p in prices:
-            if p > self.high_thresh:
-                actions.append(-1.0) # Maximum reduction
-            elif p < self.low_thresh:
-                actions.append(1.0)  # Maximum consumption (shift load here)
-            else:
-                actions.append(0.0)  # Do nothing
-        
-        return np.array(actions).reshape(-1, 1), None, None
+
+        actions = np.zeros(len(prices), dtype=np.float32)
+
+        actions[prices > self.high_threshold] = -1.0
+        actions[prices < self.low_threshold] = 1.0
+
+        return actions.reshape(-1, 1), None, None
 
     def save(self, path):
-        pass # Nothing to save
-    
+        """
+        Placeholder save method for interface compatibility.
+        """
+        return None
+
     def load(self, path):
-        pass
+        """
+        Placeholder load method for interface compatibility.
+        """
+        return None

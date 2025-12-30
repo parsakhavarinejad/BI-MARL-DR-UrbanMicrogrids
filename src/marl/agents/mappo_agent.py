@@ -1,15 +1,15 @@
+import os
 import numpy as np
+import torch
+import torch.nn.functional as F
+from torch.optim import Adam
 from marl.networks.actor_network import ActorNetwork
 from marl.networks.critic_network import CriticNetwork
 
-from torch.optim import Adam
-import torch
-import torch.nn.functional as F
-import os
 
 class MAPPOAgent:
     """
-    MAPPO-style agent with a decentralized actor and a centralized critic.
+    Multi-Agent PPO agent with a decentralized actor and a centralized critic.
     """
 
     def __init__(
@@ -17,143 +17,144 @@ class MAPPOAgent:
         state_dim,
         action_dim,
         global_state_dim,
-        ac_lr,
-        cr_lr,
-        K_epochs,
+        actor_lr,
+        critic_lr,
+        epochs,
         gamma,
-        eps_clip,
-        entropy_coeff,
+        clip_eps,
+        entropy_coef,
     ):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        """
+        Initialize networks, optimizers, and training hyperparameters.
+        """
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.actor_network = ActorNetwork(state_dim, action_dim).to(self.device)
-        # We keep an old network for PPO ratio calculation
-        self.old_actor_network = ActorNetwork(state_dim, action_dim).to(self.device)
-        self.old_actor_network.load_state_dict(self.actor_network.state_dict())
+        self.actor = ActorNetwork(state_dim, action_dim).to(self.device)
+        self.actor_old = ActorNetwork(state_dim, action_dim).to(self.device)
+        self.actor_old.load_state_dict(self.actor.state_dict())
 
-        self.critic_network = CriticNetwork(global_state_dim).to(self.device)
+        self.critic = CriticNetwork(global_state_dim).to(self.device)
 
-        self.actor_opt = Adam(self.actor_network.parameters(), lr=ac_lr)
-        self.critic_opt = Adam(self.critic_network.parameters(), lr=cr_lr)
+        self.actor_optimizer = Adam(self.actor.parameters(), lr=actor_lr)
+        self.critic_optimizer = Adam(self.critic.parameters(), lr=critic_lr)
 
-        self.K_epochs = K_epochs
+        self.epochs = epochs
         self.gamma = gamma
-        self.eps_clip = eps_clip
+        self.clip_eps = clip_eps
+        self.entropy_coef = entropy_coef
 
-        self.agent_entropy_coeff = entropy_coeff
-        self.buffer = []
+        self.memory = []
 
-    def store(self, action, state, reward, done, log_prob, pre_tanh):
-        obs = [action, state, reward, done, log_prob, pre_tanh]
-        self.buffer.append(obs)
+    def store(self, state, action, reward, done, log_prob, pre_tanh):
+        """
+        Store a transition in the rollout buffer.
+        """
+        self.memory.append((state, action, reward, done, log_prob, pre_tanh))
 
-    def actions(self, state):
-        state = torch.FloatTensor(state).to(self.device)
+    def act(self, state):
+        """
+        Sample a stochastic action from the actor policy.
+        """
+        state_tensor = torch.as_tensor(state, dtype=torch.float32, device=self.device)
         with torch.no_grad():
-            action, log_prob, _, pre_tanh = self.actor_network.sample(state)
+            action, log_prob, _, pre_tanh = self.actor.sample(state_tensor)
         return action.cpu().numpy(), log_prob.cpu().numpy(), pre_tanh.cpu().numpy()
 
-    def actions_deterministic(self, state):
-        state_t = torch.FloatTensor(state).to(self.device)
+    def act_deterministic(self, state):
+        """
+        Compute deterministic actions by applying tanh to the actor mean output.
+        """
+        state_tensor = torch.as_tensor(state, dtype=torch.float32, device=self.device)
         with torch.no_grad():
-            mu, _std = self.actor_network(state_t)
+            mu, _ = self.actor(state_tensor)
             pre_tanh = mu
             action = torch.tanh(pre_tanh)
-        logprob = torch.zeros(action.shape[0], device=self.device)
-        return action.cpu().numpy(), logprob.cpu().numpy(), pre_tanh.cpu().numpy()
+        log_prob = torch.zeros(action.shape[0], device=self.device)
+        return action.cpu().numpy(), log_prob.cpu().numpy(), pre_tanh.cpu().numpy()
+
+    def _compute_returns(self, rewards, dones):
+        """
+        Compute discounted returns with terminal resets.
+        """
+        returns = []
+        cumulative = 0.0
+        for r, d in zip(reversed(rewards), reversed(dones)):
+            if np.any(d):
+                cumulative = 0.0
+            cumulative = r + self.gamma * cumulative
+            returns.insert(0, cumulative)
+        return np.asarray(returns, dtype=np.float32)
 
     def update(self):
-        if not self.buffer:
+        """
+        Perform PPO updates for the actor and supervised value regression for the critic.
+        """
+        if len(self.memory) == 0:
             return
 
-        _, state, rewards, done, log_prob, pre_tanhs = zip(*self.buffer)
+        states, actions, rewards, dones, old_log_probs, pre_tanhs = zip(*self.memory)
 
-        discounted_reward = []
-        current_reward = 0
+        returns = self._compute_returns(rewards, dones)
 
-        for reward, is_terminal in zip(reversed(rewards), reversed(done)):
-            if np.any(is_terminal):
-                current_reward = 0
-            current_reward = reward + self.gamma * current_reward
-            discounted_reward.insert(0, current_reward)
+        states_t = torch.as_tensor(np.array(states), dtype=torch.float32, device=self.device)
+        returns_t = torch.as_tensor(returns, dtype=torch.float32, device=self.device)
+        old_log_probs_t = torch.as_tensor(np.array(old_log_probs), dtype=torch.float32, device=self.device)
+        pre_tanhs_t = torch.as_tensor(np.array(pre_tanhs), dtype=torch.float32, device=self.device)
 
-        rewards_tensor = torch.FloatTensor(np.array(discounted_reward)).to(self.device)
-        old_states = torch.FloatTensor(np.array(state)).to(self.device)
-        old_logprobs = torch.FloatTensor(np.array(log_prob)).to(self.device)
-        old_pre_tanh = torch.FloatTensor(np.array(pre_tanhs)).to(self.device)
-        
-        # Check dimensions
-        if old_pre_tanh.ndim > 1:
-            a_dim = old_pre_tanh.shape[-1]
-        else:
-            a_dim = 1
+        batch_size, num_agents, state_dim = states_t.shape
+        action_dim = 1 if pre_tanhs_t.ndim == 1 else pre_tanhs_t.shape[-1]
 
-        b, n, d = old_states.shape
-        flat_states = old_states.view(-1, d)
-        flat_old_logprobs = old_logprobs.reshape(-1)
-        flat_rewards = rewards_tensor.reshape(-1)
-        flat_pre_tanh = old_pre_tanh.reshape(-1, a_dim)
+        flat_states = states_t.reshape(-1, state_dim)
+        flat_returns = returns_t.reshape(-1)
+        flat_old_log_probs = old_log_probs_t.reshape(-1)
+        flat_pre_tanhs = pre_tanhs_t.reshape(-1, action_dim)
 
-        global_state = old_states.view(b, -1)
-        flat_global_state = (
-            global_state.unsqueeze(1).expand(-1, n, -1).reshape(-1, n * d)
-        )
+        global_states = states_t.reshape(batch_size, -1)
+        flat_global_states = global_states.unsqueeze(1).expand(-1, num_agents, -1).reshape(-1, num_agents * state_dim)
 
         with torch.no_grad():
-            critic_value_old = self.critic_network(flat_global_state).reshape(-1)
-            advantages = flat_rewards - critic_value_old
+            values_old = self.critic(flat_global_states).reshape(-1)
+            advantages = flat_returns - values_old
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-6)
 
-        for _ in range(self.K_epochs):
-            new_logprob, entropy = self.actor_network.evaluate_pre_tanh(
-                flat_states, flat_pre_tanh
-            )
-            new_logprob = new_logprob.reshape(-1)
+        for _ in range(self.epochs):
+            new_log_probs, entropy = self.actor.evaluate_pre_tanh(flat_states, flat_pre_tanhs)
+            new_log_probs = new_log_probs.reshape(-1)
 
-            ratio = torch.exp(new_logprob - flat_old_logprobs.detach())
+            ratios = torch.exp(new_log_probs - flat_old_log_probs.detach())
+            clipped = torch.clamp(ratios, 1.0 - self.clip_eps, 1.0 + self.clip_eps)
 
-            surr1 = ratio * advantages
-            surr2 = (
-                torch.clamp(ratio, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
-            )
+            policy_loss = -torch.min(ratios * advantages, clipped * advantages).mean()
 
-            new_value = self.critic_network(flat_global_state).reshape(-1)
+            values = self.critic(flat_global_states).reshape(-1)
+            value_loss = 0.5 * F.mse_loss(values, flat_returns)
 
-            actor_loss = -torch.min(surr1, surr2).mean()
-            critic_loss = 0.5 * F.mse_loss(new_value, flat_rewards)
-            entropy_bonus = entropy.mean()
+            loss = policy_loss + value_loss - self.entropy_coef * entropy.mean()
 
-            loss = actor_loss + critic_loss - self.agent_entropy_coeff * entropy_bonus
-
-            self.actor_opt.zero_grad()
-            self.critic_opt.zero_grad()
+            self.actor_optimizer.zero_grad()
+            self.critic_optimizer.zero_grad()
             loss.backward()
-            self.actor_opt.step()
-            self.critic_opt.step()
+            self.actor_optimizer.step()
+            self.critic_optimizer.step()
 
-        self.buffer = []
-        self.old_actor_network.load_state_dict(self.actor_network.state_dict())
+        self.memory.clear()
+        self.actor_old.load_state_dict(self.actor.state_dict())
 
-    # --- ADDED METHODS BELOW ---
-
-    def save(self, filename):
+    def save(self, path):
         """
-        Saves the actor and critic weights.
+        Save actor and critic parameters to disk, creating parent directories if needed.
         """
-        # Ensure the directory exists (filename might include a path)
-        directory = os.path.dirname(filename)
-        if directory and not os.path.exists(directory):
+        directory = os.path.dirname(path)
+        if directory:
             os.makedirs(directory, exist_ok=True)
-            
-        torch.save(self.actor_network.state_dict(), filename + "_actor.pth")
-        torch.save(self.critic_network.state_dict(), filename + "_critic.pth")
 
-    def load(self, filename):
+        torch.save(self.actor.state_dict(), f"{path}_actor.pth")
+        torch.save(self.critic.state_dict(), f"{path}_critic.pth")
+
+    def load(self, path):
         """
-        Loads the actor and critic weights.
+        Load actor and critic parameters from disk and synchronize the old actor.
         """
-        self.actor_network.load_state_dict(torch.load(filename + "_actor.pth", map_location=self.device))
-        self.critic_network.load_state_dict(torch.load(filename + "_critic.pth", map_location=self.device))
-        
-        # Sync old network
-        self.old_actor_network.load_state_dict(self.actor_network.state_dict())
+        self.actor.load_state_dict(torch.load(f"{path}_actor.pth", map_location=self.device))
+        self.critic.load_state_dict(torch.load(f"{path}_critic.pth", map_location=self.device))
+        self.actor_old.load_state_dict(self.actor.state_dict())

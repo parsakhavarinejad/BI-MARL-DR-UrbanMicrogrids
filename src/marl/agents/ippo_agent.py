@@ -5,92 +5,120 @@ from torch.optim import Adam
 from marl.networks.actor_network import ActorNetwork
 from marl.networks.critic_network import CriticNetwork
 
+
 class IPPOAgent:
-    def __init__(self, state_dim, action_dim, ac_lr, cr_lr, K_epochs, gamma, eps_clip, entropy_coeff):
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        
+    """
+    Independent Proximal Policy Optimization agent with separate actor and critic networks.
+    """
+
+    def __init__(self, state_dim, action_dim, actor_lr, critic_lr, epochs, gamma, clip_eps, entropy_coef):
+        """
+        Initialize networks, optimizers, and hyperparameters.
+        """
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         self.actor = ActorNetwork(state_dim, action_dim).to(self.device)
-        self.critic = CriticNetwork(state_dim).to(self.device) # Local state only
-        
-        self.actor_opt = Adam(self.actor.parameters(), lr=ac_lr)
-        self.critic_opt = Adam(self.critic.parameters(), lr=cr_lr)
-        
-        self.K_epochs = K_epochs
+        self.critic = CriticNetwork(state_dim).to(self.device)
+
+        self.actor_optimizer = Adam(self.actor.parameters(), lr=actor_lr)
+        self.critic_optimizer = Adam(self.critic.parameters(), lr=critic_lr)
+
+        self.epochs = epochs
         self.gamma = gamma
-        self.eps_clip = eps_clip
-        self.entropy_coeff = entropy_coeff
-        self.buffer = []
+        self.clip_eps = clip_eps
+        self.entropy_coef = entropy_coef
 
-    def actions(self, state):
-        state_t = torch.FloatTensor(state).to(self.device)
+        self.memory = []
+
+    def act(self, state):
+        """
+        Sample an action from the current policy given a state.
+        """
+        state_tensor = torch.as_tensor(state, dtype=torch.float32, device=self.device)
         with torch.no_grad():
-            action, log_prob, _, pre_tanh = self.actor.sample(state_t)
-        return action.cpu().numpy(), log_prob.cpu().numpy(), pre_tanh.cpu().numpy()
+            action, log_prob, _, pre_tanh = self.actor.sample(state_tensor)
+        return (
+            action.detach().cpu().numpy(),
+            log_prob.detach().cpu().numpy(),
+            pre_tanh.detach().cpu().numpy(),
+        )
 
-    def store(self, action, state, reward, done, log_prob, pre_tanh):
-        self.buffer.append([action, state, reward, done, log_prob, pre_tanh])
+    def remember(self, state, action, reward, done, log_prob, pre_tanh):
+        """
+        Store a transition in the agent memory.
+        """
+        self.memory.append((state, action, reward, done, log_prob, pre_tanh))
+
+    def _compute_returns(self, rewards, dones):
+        """
+        Compute discounted returns using a Monte Carlo estimate.
+        """
+        returns = []
+        cumulative = 0.0
+        for r, d in zip(reversed(rewards), reversed(dones)):
+            if np.any(d):
+                cumulative = 0.0
+            cumulative = r + self.gamma * cumulative
+            returns.insert(0, cumulative)
+        return np.asarray(returns, dtype=np.float32)
 
     def update(self):
-        if not self.buffer: return
-        
-        actions, states, rewards, dones, log_probs, pre_tanhs = zip(*self.buffer)
-        
-        # 1. Monte Carlo Estimate of Returns
-        discounted_rewards = []
-        running_add = 0
-        for r, d in zip(reversed(rewards), reversed(dones)):
-            if np.any(d): running_add = 0
-            running_add = r + self.gamma * running_add
-            discounted_rewards.insert(0, running_add)
-            
-        # 2. Convert to Tensor
-        rewards_t = torch.FloatTensor(np.array(discounted_rewards)).to(self.device)
-        states_t = torch.FloatTensor(np.array(states)).to(self.device) #(B, N, State)
-        old_logprobs_t = torch.FloatTensor(np.array(log_probs)).to(self.device)
-        old_pre_tanh_t = torch.FloatTensor(np.array(pre_tanhs)).to(self.device)
-        
-        # Flatten for independent processing (Batch * Agents, State)
-        B, N, D = states_t.shape
-        flat_states = states_t.view(-1, D)
-        flat_rewards = rewards_t.view(-1)
-        flat_logprobs = old_logprobs_t.view(-1)
-        flat_pre_tanh = old_pre_tanh_t.view(-1, old_pre_tanh_t.shape[-1])
+        """
+        Update actor and critic networks using PPO.
+        """
+        if len(self.memory) == 0:
+            return
 
-        # 3. PPO Update
-        for _ in range(self.K_epochs):
-            # Evaluate old actions and values
-            new_logprobs, entropy = self.actor.evaluate_pre_tanh(flat_states, flat_pre_tanh)
-            new_logprobs = new_logprobs.view(-1)
-            
-            # Critic evaluates LOCAL state only
-            state_values = self.critic(flat_states).view(-1)
-            
-            # Ratios
-            ratios = torch.exp(new_logprobs - flat_logprobs.detach())
-            
-            # Advantages
-            advantages = flat_rewards - state_values.detach()
-            
-            surr1 = ratios * advantages
-            surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages
-            
-            loss_actor = -torch.min(surr1, surr2).mean()
-            loss_critic = 0.5 * F.mse_loss(state_values, flat_rewards)
-            
-            loss = loss_actor + loss_critic - self.entropy_coeff * entropy.mean()
-            
-            self.actor_opt.zero_grad()
-            self.critic_opt.zero_grad()
-            loss.backward()
-            self.actor_opt.step()
-            self.critic_opt.step()
-            
-        self.buffer = []
+        states, actions, rewards, dones, old_log_probs, pre_tanhs = zip(*self.memory)
 
-    def save(self, filename):
-        torch.save(self.actor.state_dict(), filename + "_actor.pth")
-        torch.save(self.critic.state_dict(), filename + "_critic.pth")
+        returns = self._compute_returns(rewards, dones)
 
-    def load(self, filename):
-        self.actor.load_state_dict(torch.load(filename + "_actor.pth"))
-        self.critic.load_state_dict(torch.load(filename + "_critic.pth"))
+        states_t = torch.as_tensor(np.array(states), dtype=torch.float32, device=self.device)
+        returns_t = torch.as_tensor(returns, dtype=torch.float32, device=self.device)
+        old_log_probs_t = torch.as_tensor(np.array(old_log_probs), dtype=torch.float32, device=self.device)
+        pre_tanhs_t = torch.as_tensor(np.array(pre_tanhs), dtype=torch.float32, device=self.device)
+
+        batch_size, num_agents, state_dim = states_t.shape
+
+        flat_states = states_t.reshape(-1, state_dim)
+        flat_returns = returns_t.reshape(-1)
+        flat_old_log_probs = old_log_probs_t.reshape(-1)
+        flat_pre_tanhs = pre_tanhs_t.reshape(-1, pre_tanhs_t.shape[-1])
+
+        for _ in range(self.epochs):
+            new_log_probs, entropy = self.actor.evaluate_pre_tanh(flat_states, flat_pre_tanhs)
+            new_log_probs = new_log_probs.reshape(-1)
+
+            values = self.critic(flat_states).reshape(-1)
+
+            ratios = torch.exp(new_log_probs - flat_old_log_probs.detach())
+            advantages = flat_returns - values.detach()
+
+            clipped_ratios = torch.clamp(ratios, 1.0 - self.clip_eps, 1.0 + self.clip_eps)
+
+            policy_loss = -torch.min(ratios * advantages, clipped_ratios * advantages).mean()
+            value_loss = 0.5 * F.mse_loss(values, flat_returns)
+
+            total_loss = policy_loss + value_loss - self.entropy_coef * entropy.mean()
+
+            self.actor_optimizer.zero_grad()
+            self.critic_optimizer.zero_grad()
+            total_loss.backward()
+            self.actor_optimizer.step()
+            self.critic_optimizer.step()
+
+        self.memory.clear()
+
+    def save(self, path):
+        """
+        Save actor and critic parameters to disk.
+        """
+        torch.save(self.actor.state_dict(), f"{path}_actor.pth")
+        torch.save(self.critic.state_dict(), f"{path}_critic.pth")
+
+    def load(self, path):
+        """
+        Load actor and critic parameters from disk.
+        """
+        self.actor.load_state_dict(torch.load(f"{path}_actor.pth", map_location=self.device))
+        self.critic.load_state_dict(torch.load(f"{path}_critic.pth", map_location=self.device))

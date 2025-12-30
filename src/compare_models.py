@@ -8,7 +8,6 @@ from utils.config_parser import Config
 from evaluation import evaluate_agent
 from utils.experiment_paths import ExperimentPaths
 
-# Import Agents
 from marl.agents.mappo_agent import MAPPOAgent
 from marl.agents.ippo_agent import IPPOAgent
 from marl.agents.maddpg_agent import MADDPGAgent
@@ -39,7 +38,6 @@ def main():
     cfg = Config("configs/config.yaml")
     paths = ExperimentPaths(experiment_name=args.exp_name)
     
-    # This is the 'comparison_results' folder
     comp_dir = paths.get_comparison_dirs()
 
     algos = ["rule", "ippo", "maddpg", "mappo"]
@@ -52,7 +50,6 @@ def main():
     all_summaries = []
 
     for algo in algos:
-        # Path: results/ExpName/models/algo/final_model
         model_path = os.path.join(paths.models_dir, algo, "final_model")
         
         if algo != "rule" and not os.path.exists(model_path + "_actor.pth"):
@@ -64,7 +61,6 @@ def main():
         print(f"--- Evaluating {algo} ---")
         df = evaluate_agent(agent, env, num_episodes=50)
         
-        # Rename column to Algo Name
         perf = df[["Metric", "MAPPO (Mean)"]].copy()
         perf.columns = ["Metric", algo.upper()]
         perf.set_index("Metric", inplace=True)
@@ -74,7 +70,6 @@ def main():
         print("No models found to compare.")
         return
 
-    # 1. Combine and Save CSV
     final_table = pd.concat(all_summaries, axis=1)
     print("\nFINAL COMPARISON TABLE")
     print(final_table)
@@ -83,7 +78,6 @@ def main():
     final_table.to_csv(csv_path)
     print(f"Saved table to: {csv_path}")
     
-    # 2. Save Chart
     final_table.T.plot(kind="bar", figsize=(12, 6), rot=0)
     plt.title("Algorithm Performance Comparison")
     plt.ylabel("Value")

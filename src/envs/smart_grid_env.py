@@ -164,6 +164,7 @@ class SmartGridEnv(gym.Env):
 
         income_feature = raw_norm[:, 9]
         rewards = []
+        voltages = []
         for i in range(self.num_agents):
             cost_pence = real_actual_load[i] * real_dynamic_price[i]
             agent_specific_weight = self.discomfort_weight * (0.5 + income_feature[i])
@@ -171,6 +172,9 @@ class SmartGridEnv(gym.Env):
             discomfort = (actions[i] ** 2) * agent_specific_weight
             reward = -(cost_pence + discomfort) * self.scaling_factor
             rewards.append(reward)
+            v_drop = real_actual_load[i] * 0.01 
+            voltages.append(1.0 - v_drop)
+            info = {"voltages": voltages}
 
         self.current_step += 1
         done = self.current_step >= self.total_steps
@@ -181,7 +185,7 @@ class SmartGridEnv(gym.Env):
             else np.zeros((self.num_agents, self.state_dim), dtype=np.float32)
         )
 
-        return next_obs, np.array(rewards, dtype=np.float32), done, False, {}
+        return next_obs, np.array(rewards, dtype=np.float32), done, False, info
 
     def _get_obs(self):
         """

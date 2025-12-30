@@ -79,7 +79,7 @@ def save_paper_visualizations(agent, env, save_dir="results"):
     actions = np.array(history["actions"])
     time_steps = np.arange(steps) / 4.0
 
-    for agent_id in range(12):
+    for agent_id in range(int(12)):
         fig, ax1 = plt.subplots(figsize=(12, 6))
 
         ax1.plot(

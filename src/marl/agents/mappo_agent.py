@@ -5,24 +5,11 @@ from marl.networks.critic_network import CriticNetwork
 from torch.optim import Adam
 import torch
 import torch.nn.functional as F
-
+import os
 
 class MAPPOAgent:
     """
     MAPPO-style agent with a decentralized actor and a centralized critic.
-
-    This implementation follows the CTDE idea:
-    - Actor takes local state per agent:      (num_agents, state_dim)
-    - Critic takes a global state vector:     (num_agents * state_dim,)
-
-    The buffer stores trajectory tuples and `update` performs K epochs of PPO-style
-    optimization with clipping.
-
-    Notes
-    -----
-    - This code assumes the actor's `get_action(state)` returns (action, log_prob, entropy).
-    - The critic is trained to predict a scalar value for the global state.
-    - Rewards are discounted and then normalized before training.
     """
 
     def __init__(
@@ -37,31 +24,10 @@ class MAPPOAgent:
         eps_clip,
         entropy_coeff,
     ):
-        """
-        Initialize actor/critic networks, optimizers, and training hyperparameters.
-
-        Parameters
-        ----------
-        state_dim : int
-            Dimension of each agent's local state (observation features).
-        action_dim : int
-            Dimension of each agent's action space.
-        global_state_dim : int
-            Dimension of the critic input (typically num_agents * state_dim).
-        ac_lr : float
-            Learning rate for the actor optimizer.
-        cr_lr : float
-            Learning rate for the critic optimizer.
-        K_epochs : int
-            Number of PPO update epochs per batch of collected experience.
-        gamma : float
-            Discount factor.
-        eps_clip : float
-            PPO clipping parameter.
-        """
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         self.actor_network = ActorNetwork(state_dim, action_dim).to(self.device)
+        # We keep an old network for PPO ratio calculation
         self.old_actor_network = ActorNetwork(state_dim, action_dim).to(self.device)
         self.old_actor_network.load_state_dict(self.actor_network.state_dict())
 
@@ -78,79 +44,28 @@ class MAPPOAgent:
         self.buffer = []
 
     def store(self, action, state, reward, done, log_prob, pre_tanh):
-        """
-        Store a single transition in the on-policy buffer.
-
-        Parameters
-        ----------
-        acton : np.ndarray or torch.Tensor
-            Action taken by the policy.
-        state : np.ndarray or torch.Tensor
-            Local states for all agents at the time of action.
-        reward : float or np.ndarray
-            Reward signal from the environment.
-        done : bool or np.ndarray
-            Episode termination flag(s).
-        log_prob : np.ndarray or torch.Tensor
-            Log-probability of the action under the behavior policy.
-        """
         obs = [action, state, reward, done, log_prob, pre_tanh]
         self.buffer.append(obs)
 
     def actions(self, state):
-        """
-        Sample actions from the current actor for a given state.
-
-        Parameters
-        ----------
-        state : np.ndarray
-            Local observation/state, typically shaped (num_agents, state_dim).
-
-        Returns
-        -------
-        action : np.ndarray
-            Sampled action(s).
-        log_prob : np.ndarray
-            Log-probability of the sampled action(s).
-        """
         state = torch.FloatTensor(state).to(self.device)
-
         with torch.no_grad():
             action, log_prob, _, pre_tanh = self.actor_network.sample(state)
-
         return action.cpu().numpy(), log_prob.cpu().numpy(), pre_tanh.cpu().numpy()
 
     def actions_deterministic(self, state):
-        """
-        Deterministic (mean) action for evaluation:
-        action = tanh(mu(state))
-        Returns action, dummy_logprob, dummy_pre_tanh
-        """
         state_t = torch.FloatTensor(state).to(self.device)
         with torch.no_grad():
             mu, _std = self.actor_network(state_t)
             pre_tanh = mu
             action = torch.tanh(pre_tanh)
-
         logprob = torch.zeros(action.shape[0], device=self.device)
-
         return action.cpu().numpy(), logprob.cpu().numpy(), pre_tanh.cpu().numpy()
 
     def update(self):
-        """
-        Update actor and critic using PPO-style clipped objective.
+        if not self.buffer:
+            return
 
-        This method:
-        1) Builds discounted rewards from the buffer
-        2) Flattens data over (batch, agent) for vectorized optimization
-        3) Constructs per-agent repeated global state for centralized critic input
-        4) Runs K epochs of PPO update
-
-        Parameters
-        ----------
-        state : Any
-            Unused in the current implementation (kept to preserve structure).
-        """
         _, state, rewards, done, log_prob, pre_tanhs = zip(*self.buffer)
 
         discounted_reward = []
@@ -159,7 +74,6 @@ class MAPPOAgent:
         for reward, is_terminal in zip(reversed(rewards), reversed(done)):
             if np.any(is_terminal):
                 current_reward = 0
-
             current_reward = reward + self.gamma * current_reward
             discounted_reward.insert(0, current_reward)
 
@@ -167,7 +81,12 @@ class MAPPOAgent:
         old_states = torch.FloatTensor(np.array(state)).to(self.device)
         old_logprobs = torch.FloatTensor(np.array(log_prob)).to(self.device)
         old_pre_tanh = torch.FloatTensor(np.array(pre_tanhs)).to(self.device)
-        a_dim = old_pre_tanh.shape[-1]
+        
+        # Check dimensions
+        if old_pre_tanh.ndim > 1:
+            a_dim = old_pre_tanh.shape[-1]
+        else:
+            a_dim = 1
 
         b, n, d = old_states.shape
         flat_states = old_states.view(-1, d)
@@ -204,8 +123,7 @@ class MAPPOAgent:
             critic_loss = 0.5 * F.mse_loss(new_value, flat_rewards)
             entropy_bonus = entropy.mean()
 
-            entropy_coeff = self.agent_entropy_coeff
-            loss = actor_loss + critic_loss - entropy_coeff * entropy_bonus
+            loss = actor_loss + critic_loss - self.agent_entropy_coeff * entropy_bonus
 
             self.actor_opt.zero_grad()
             self.critic_opt.zero_grad()
@@ -216,33 +134,26 @@ class MAPPOAgent:
         self.buffer = []
         self.old_actor_network.load_state_dict(self.actor_network.state_dict())
 
+    # --- ADDED METHODS BELOW ---
 
-# ---------- Test ----------
-if __name__ == "__main__":
-    agent = MAPPOAgent(
-        state_dim=8,
-        action_dim=1,
-        global_state_dim=96,
-        ac_lr=1e-4,
-        cr_lr=2e-4,
-        K_epochs=2,
-        gamma=0.99,
-        eps_clip=0.2,
-    )
+    def save(self, filename):
+        """
+        Saves the actor and critic weights.
+        """
+        # Ensure the directory exists (filename might include a path)
+        directory = os.path.dirname(filename)
+        if directory and not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+            
+        torch.save(self.actor_network.state_dict(), filename + "_actor.pth")
+        torch.save(self.critic_network.state_dict(), filename + "_critic.pth")
 
-    b = 5  # number of time steps collected in the buffer
-
-    for t in range(b):
-        state = np.random.randn(12, 8).astype(np.float32)
-        action, log_prob = agent.actions(state)
-        reward = float(np.random.randn())
-        done = bool(t == b - 1)
-
-        agent.store(action, state, reward, done, log_prob)
-
-    print("Buffer length before update:", len(agent.buffer))
-
-    agent.update()
-
-    print("Buffer length after update:", len(agent.buffer))
-    print("Update ran successfully.")
+    def load(self, filename):
+        """
+        Loads the actor and critic weights.
+        """
+        self.actor_network.load_state_dict(torch.load(filename + "_actor.pth", map_location=self.device))
+        self.critic_network.load_state_dict(torch.load(filename + "_critic.pth", map_location=self.device))
+        
+        # Sync old network
+        self.old_actor_network.load_state_dict(self.actor_network.state_dict())

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.optim import Adam
 from marl.networks.actor_network import ActorNetwork
 from marl.networks.critic_network import CriticNetwork
-
+import os
 
 class IPPOAgent:
     """
@@ -43,11 +43,22 @@ class IPPOAgent:
             pre_tanh.detach().cpu().numpy(),
         )
 
+    # Alias for compatibility with visualization/evaluation scripts
+    def actions(self, state):
+        return self.act(state)
+
     def remember(self, state, action, reward, done, log_prob, pre_tanh):
         """
         Store a transition in the agent memory.
         """
         self.memory.append((state, action, reward, done, log_prob, pre_tanh))
+    
+    # Alias for compatibility with main.py
+    def store(self, action, state, reward, done, log_prob, pre_tanh):
+        # Note: main.py passes (action, obs, reward, done, logprob, pre_tanh)
+        # remember expects (state, action, reward, done, log_prob, pre_tanh)
+        # We map arguments correctly here:
+        self.remember(state, action, reward, done, log_prob, pre_tanh)
 
     def _compute_returns(self, rewards, dones):
         """
@@ -83,7 +94,9 @@ class IPPOAgent:
         flat_states = states_t.reshape(-1, state_dim)
         flat_returns = returns_t.reshape(-1)
         flat_old_log_probs = old_log_probs_t.reshape(-1)
-        flat_pre_tanhs = pre_tanhs_t.reshape(-1, pre_tanhs_t.shape[-1])
+        # Ensure pre_tanhs matches flat structure
+        # pre_tanhs might be (batch, agents, 1) or (batch, agents)
+        flat_pre_tanhs = pre_tanhs_t.reshape(-1, 1)
 
         for _ in range(self.epochs):
             new_log_probs, entropy = self.actor.evaluate_pre_tanh(flat_states, flat_pre_tanhs)
@@ -113,6 +126,9 @@ class IPPOAgent:
         """
         Save actor and critic parameters to disk.
         """
+        directory = os.path.dirname(path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
         torch.save(self.actor.state_dict(), f"{path}_actor.pth")
         torch.save(self.critic.state_dict(), f"{path}_critic.pth")
 

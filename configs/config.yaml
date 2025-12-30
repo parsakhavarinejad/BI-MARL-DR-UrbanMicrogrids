@@ -20,7 +20,7 @@ data:
 
 
 main:
-  num_episodes: 100
+  num_episodes: 50
   num_agents: 25
   update_interval: 17
   num_steps_per_day: 96

@@ -7,9 +7,6 @@ class RuleBasedAgent:
     """
 
     def __init__(self, high_price_threshold=0.7, low_price_threshold=0.3):
-        """
-        Initialize price thresholds that determine agent behavior.
-        """
         self.high_threshold = high_price_threshold
         self.low_threshold = low_price_threshold
 
@@ -25,15 +22,13 @@ class RuleBasedAgent:
         actions[prices < self.low_threshold] = 1.0
 
         return actions.reshape(-1, 1), None, None
+    
+    # Alias
+    def act(self, state):
+        return self.actions(state)
 
     def save(self, path):
-        """
-        Placeholder save method for interface compatibility.
-        """
         return None
 
     def load(self, path):
-        """
-        Placeholder load method for interface compatibility.
-        """
         return None

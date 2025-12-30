@@ -23,27 +23,6 @@ def calculate_jains_index(values):
     return (s1 * s1) / (n * s2)
 
 
-def analyze_convergence(log_path, threshold_ratio=0.90):
-    """
-    Return the first episode index (1-based) where moving_avg reaches a fraction of its max value.
-    """
-    try:
-        df = pd.read_csv(log_path)
-        if "moving_avg" not in df.columns:
-            return "N/A (Column 'moving_avg' missing)"
-
-        moving_avg = df["moving_avg"]
-        target = float(moving_avg.max()) * float(threshold_ratio)
-
-        idx = df.index[moving_avg >= target]
-        if len(idx) == 0:
-            return "Not Converged"
-
-        return int(idx[0]) + 1
-    except Exception:
-        return "Error"
-
-
 def evaluate_agent(agent, env, num_episodes=50):
     """
     Run evaluation episodes and return a summary DataFrame of community-level metrics.
@@ -74,6 +53,7 @@ def evaluate_agent(agent, env, num_episodes=50):
         total_steps = 0
 
         while not done:
+            # Compatible call: uses the alias defined in agents
             actions, _, _ = agent.actions(obs)
 
             raw = env._get_obs_raw_norm()
@@ -129,3 +109,33 @@ def evaluate_agent(agent, env, num_episodes=50):
         jain = float(calculate_jains_index(agent_savings))
 
         peak_base = float(np.max(comm_base))
+        peak_opt = float(np.max(comm_opt))
+        avg_discomfort = float(np.mean(actions_sq))
+
+        results["par_base"].append(par_base)
+        results["par_opt"].append(par_opt)
+        results["cost_base"].append(cost_base)
+        results["cost_opt"].append(cost_opt)
+        results["peak_base"].append(peak_base)
+        results["peak_opt"].append(peak_opt)
+        results["discomfort"].append(avg_discomfort)
+        results["jains_index"].append(jain)
+        results["voltage_violations"].append(episode_voltage_violations)
+
+    # Return a DataFrame with generic "Value" column
+    summary = {
+        "Metric": [
+            "PAR (Base)", "PAR (Opt)", 
+            "Cost (Base)", "Cost (Opt)", 
+            "Peak (Base)", "Peak (Opt)", 
+            "Discomfort", "Jain's Index", "Voltage Violations"
+        ],
+        "Value": [
+            np.mean(results["par_base"]), np.mean(results["par_opt"]),
+            np.mean(results["cost_base"]), np.mean(results["cost_opt"]),
+            np.mean(results["peak_base"]), np.mean(results["peak_opt"]),
+            np.mean(results["discomfort"]), np.mean(results["jains_index"]),
+            np.mean(results["voltage_violations"])
+        ]
+    }
+    return pd.DataFrame(summary)

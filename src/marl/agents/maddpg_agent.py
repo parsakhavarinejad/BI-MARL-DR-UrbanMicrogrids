@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch.optim import Adam
 import random
+import os
 from marl.networks.actor_network import ActorNetwork
 from marl.networks.critic_network import CriticNetwork
 
@@ -13,47 +14,31 @@ class ReplayBuffer:
     """
 
     def __init__(self, capacity):
-        """
-        Initialize the replay buffer.
-        """
         self.capacity = capacity
         self.buffer = []
         self.position = 0
 
     def push(self, state, action, reward, next_state, done):
-        """
-        Store a transition in the buffer.
-        """
         if len(self.buffer) < self.capacity:
             self.buffer.append(None)
         self.buffer[self.position] = (state, action, reward, next_state, done)
         self.position = (self.position + 1) % self.capacity
 
     def sample(self, batch_size):
-        """
-        Sample a random batch of transitions.
-        """
         batch = random.sample(self.buffer, batch_size)
         states, actions, rewards, next_states, dones = map(np.stack, zip(*batch))
         return states, actions, rewards, next_states, dones
 
     def __len__(self):
-        """
-        Return the current size of the buffer.
-        """
         return len(self.buffer)
 
 
 class MADDPGAgent:
     """
-    Multi-Agent Deep Deterministic Policy Gradient agent with a centralized critic
-    and decentralized actor using shared parameters.
+    Multi-Agent Deep Deterministic Policy Gradient agent.
     """
 
     def __init__(self, state_dim, action_dim, global_state_dim, lr=1e-3, gamma=0.99, tau=0.005):
-        """
-        Initialize actor, critic, target networks, optimizers, and replay buffer.
-        """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.gamma = gamma
         self.tau = tau
@@ -84,17 +69,15 @@ class MADDPGAgent:
             mu, _ = self.actor(state_tensor)
             action = torch.tanh(mu)
         return action.cpu().numpy(), None, None
+    
+    # Alias for compatibility
+    def actions(self, state):
+        return self.act(state)
 
     def store(self, state, action, reward, next_state, done):
-        """
-        Store a transition in the replay buffer.
-        """
         self.replay_buffer.push(state, action, reward, next_state, done)
 
     def update(self, batch_size=64):
-        """
-        Update actor and critic networks using sampled experiences.
-        """
         if len(self.replay_buffer) < batch_size:
             return
 
@@ -152,15 +135,12 @@ class MADDPGAgent:
             target_param.data.add_(self.tau * param.data)
 
     def save(self, path):
-        """
-        Save actor and critic network parameters.
-        """
+        directory = os.path.dirname(path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
         torch.save(self.actor.state_dict(), f"{path}_actor.pth")
         torch.save(self.critic.state_dict(), f"{path}_critic.pth")
 
     def load(self, path):
-        """
-        Load actor and critic network parameters.
-        """
         self.actor.load_state_dict(torch.load(f"{path}_actor.pth", map_location=self.device))
         self.critic.load_state_dict(torch.load(f"{path}_critic.pth", map_location=self.device))

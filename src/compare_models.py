@@ -61,10 +61,14 @@ def main():
         print(f"--- Evaluating {algo} ---")
         df = evaluate_agent(agent, env, num_episodes=50)
         
-        perf = df[["Metric", "MAPPO (Mean)"]].copy()
-        perf.columns = ["Metric", algo.upper()]
-        perf.set_index("Metric", inplace=True)
-        all_summaries.append(perf)
+        # FIX: Select generic 'Value' column and rename it to the algorithm name
+        if df is not None and not df.empty:
+            perf = df[["Metric", "Value"]].copy()
+            perf.columns = ["Metric", algo.upper()]
+            perf.set_index("Metric", inplace=True)
+            all_summaries.append(perf)
+        else:
+            print(f"Warning: No evaluation data returned for {algo}")
 
     if not all_summaries:
         print("No models found to compare.")

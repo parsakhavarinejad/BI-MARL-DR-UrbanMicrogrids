@@ -24,9 +24,6 @@ class MAPPOAgent:
         clip_eps,
         entropy_coef,
     ):
-        """
-        Initialize networks, optimizers, and training hyperparameters.
-        """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.actor = ActorNetwork(state_dim, action_dim).to(self.device)
@@ -45,10 +42,8 @@ class MAPPOAgent:
 
         self.memory = []
 
-    def store(self, state, action, reward, done, log_prob, pre_tanh):
-        """
-        Store a transition in the rollout buffer.
-        """
+    def store(self, action, state, reward, done, log_prob, pre_tanh):
+        # Arguments aligned with main.py call signature
         self.memory.append((state, action, reward, done, log_prob, pre_tanh))
 
     def act(self, state):
@@ -59,11 +54,12 @@ class MAPPOAgent:
         with torch.no_grad():
             action, log_prob, _, pre_tanh = self.actor.sample(state_tensor)
         return action.cpu().numpy(), log_prob.cpu().numpy(), pre_tanh.cpu().numpy()
+    
+    # Alias for compatibility
+    def actions(self, state):
+        return self.act(state)
 
     def act_deterministic(self, state):
-        """
-        Compute deterministic actions by applying tanh to the actor mean output.
-        """
         state_tensor = torch.as_tensor(state, dtype=torch.float32, device=self.device)
         with torch.no_grad():
             mu, _ = self.actor(state_tensor)
@@ -73,9 +69,6 @@ class MAPPOAgent:
         return action.cpu().numpy(), log_prob.cpu().numpy(), pre_tanh.cpu().numpy()
 
     def _compute_returns(self, rewards, dones):
-        """
-        Compute discounted returns with terminal resets.
-        """
         returns = []
         cumulative = 0.0
         for r, d in zip(reversed(rewards), reversed(dones)):
@@ -86,9 +79,6 @@ class MAPPOAgent:
         return np.asarray(returns, dtype=np.float32)
 
     def update(self):
-        """
-        Perform PPO updates for the actor and supervised value regression for the critic.
-        """
         if len(self.memory) == 0:
             return
 
@@ -141,20 +131,13 @@ class MAPPOAgent:
         self.actor_old.load_state_dict(self.actor.state_dict())
 
     def save(self, path):
-        """
-        Save actor and critic parameters to disk, creating parent directories if needed.
-        """
         directory = os.path.dirname(path)
         if directory:
             os.makedirs(directory, exist_ok=True)
-
         torch.save(self.actor.state_dict(), f"{path}_actor.pth")
         torch.save(self.critic.state_dict(), f"{path}_critic.pth")
 
     def load(self, path):
-        """
-        Load actor and critic parameters from disk and synchronize the old actor.
-        """
         self.actor.load_state_dict(torch.load(f"{path}_actor.pth", map_location=self.device))
         self.critic.load_state_dict(torch.load(f"{path}_critic.pth", map_location=self.device))
         self.actor_old.load_state_dict(self.actor.state_dict())

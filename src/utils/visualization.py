@@ -45,18 +45,12 @@ def save_paper_visualizations(agent, env, save_dir="results"):
 
     history = {"base_load": [], "actual_load": [], "price": [], "actions": []}
 
-    # ... inside save_paper_visualizations ...
-
     steps = env.total_steps
     for _ in range(steps):
-        # Get actions
         actions, _, _ = agent.actions(obs)
-
-        # Get Raw State
         raw_state = env._get_obs_raw_norm()
         current_base_load = raw_state[:, 0].copy()
         current_base_price = raw_state[:, 1].copy()  
-        # Calculate Actual Load
         clipped_actions = np.clip(actions.reshape(-1), -1.0, 1.0)
         actual_load = current_base_load * (1 + clipped_actions)
 
@@ -67,8 +61,6 @@ def save_paper_visualizations(agent, env, save_dir="results"):
 
         history["base_load"].append(current_base_load)
         history["actual_load"].append(actual_load)
-
-        # CHANGE THIS LINE: Store dynamic_price instead of current_base_price
         history["price"].append(dynamic_price)
 
         history["actions"].append(clipped_actions)
@@ -79,7 +71,7 @@ def save_paper_visualizations(agent, env, save_dir="results"):
     actions = np.array(history["actions"])
     time_steps = np.arange(steps) / 4.0
 
-    for agent_id in range(12):
+    for agent_id in range(int(12)):
         fig, ax1 = plt.subplots(figsize=(12, 6))
 
         ax1.plot(

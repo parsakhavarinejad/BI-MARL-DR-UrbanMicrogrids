@@ -1,2 +1,0 @@
-1. The results were generated on December 26th on the `adapt-with-new-data` branch. The changes include adding more features to the dataset as well as more houses (agents).
-2. The remaining task is to just implement the reward system based on heterogeneous data per agent's income.

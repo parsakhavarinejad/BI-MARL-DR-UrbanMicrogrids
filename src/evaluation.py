@@ -1,140 +1,101 @@
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
+def calculate_jains_index(values):
+    values_arr = np.asarray(values, dtype=np.float64)
+    values_arr = np.maximum(values_arr, 0.0)
+    n = values_arr.size
+    if n == 0: return 0.0
+    s1 = float(np.sum(values_arr))
+    s2 = float(np.sum(values_arr ** 2))
+    if s2 == 0.0: return 0.0
+    return (s1 * s1) / (n * s2)
 
 def evaluate_agent(agent, env, num_episodes=50):
-    """
-    Corrected for:
-    (2) Baseline vs Opt costs use their own price trajectories (dynamic pricing fairness)
-    (3) Logged loads match the actions actually applied to env.step() (clip consistency)
-
-    Assumptions:
-    - env.step() accepts the same action shape returned by agent.actions(obs)
-    - env._get_obs_raw_norm() returns an array shaped (n_agents, n_features) where:
-        raw[:, 0] = baseline load at current step
-        raw[:, 1] = base price signal at current step
-    - env._get_dynamic_price(total_grid_load, base_price_vector) returns price vector per agent
-      for the current step (same shape as base_price_vector)
-    """
-    print(f"Starting Evaluation over {num_episodes} episodes...")
-
     results = {
-        "par_base": [],
-        "par_opt": [],
-        "cost_base": [],
-        "cost_opt": [],
-        "peak_base": [],
-        "peak_opt": [],
-        "discomfort": [],
+        "par_base": [], "par_opt": [],
+        "cost_base": [], "cost_opt": [],
+        "peak_base": [], "peak_opt": [],
+        "discomfort": [], "jains_index": [],
+        "voltage_violations": []
     }
 
-    for _ in range(num_episodes):
+    for _ in range(int(num_episodes)):
         obs, _ = env.reset()
         done = False
-
-        base_loads = []
-        opt_loads = []
-        prices_base = []
-        prices_opt = []
+        base_loads, opt_loads = [], []
+        prices_base, prices_opt = [], []
         actions_sq = []
+        episode_voltage_violations = 0
 
         while not done:
-            # 1) Agent proposes actions
-            actions, _, _ = agent.actions(obs)
+            if hasattr(agent, "actions"):
+                actions, _, _ = agent.actions(obs)
+            else:
+                actions, _, _ = agent.act(obs)
 
-            # 2) Read raw baseline signals for THIS step
             raw = env._get_obs_raw_norm()
-            current_base_load = raw[:, 0].copy()
-            current_base_price = raw[:, 1].copy()
+            base_load = raw[:, 0].copy()
+            base_price = raw[:, 1].copy()
+            clipped = np.clip(np.asarray(actions).reshape(-1), -1.0, 1.0)
+            env_actions = clipped.reshape(np.asarray(actions).shape)
 
-            # 3) Clip actions and ensure we STEP with the same clipped actions
-            clipped_flat = np.clip(np.asarray(actions).reshape(-1), -1.0, 1.0)
-            env_actions = clipped_flat.reshape(np.asarray(actions).shape)
+            opt_load = base_load * (1.0 + clipped)
+            total_base = float(np.sum(base_load))
+            total_opt = float(np.sum(opt_load))
+            price_base_vec = env._get_dynamic_price_real(total_base, base_price)
+            price_opt_vec = env._get_dynamic_price_real(total_opt, base_price)
 
-            # 4) Compute baseline and optimized loads for logging
-            actual_load = current_base_load * (1.0 + clipped_flat)
-
-            # 5) Compute TWO price trajectories (baseline vs optimized),
-            #    because dynamic price depends on total grid load.
-            total_grid_load_base = float(np.sum(current_base_load))
-            total_grid_load_opt = float(np.sum(actual_load))
-
-            price_base_vec = env._get_dynamic_price_real(total_grid_load_base, current_base_price)
-            price_opt_vec = env._get_dynamic_price_real(total_grid_load_opt, current_base_price)
-
-            # 6) Step environment using the SAME actions used in logging
-            obs, _, terminated, truncated, _ = env.step(env_actions)
+            obs, _, terminated, truncated, info = env.step(env_actions)
             done = bool(terminated or truncated)
 
-            # 7) Store trajectories
-            base_loads.append(current_base_load)
-            opt_loads.append(actual_load)
+            if info and "voltages" in info:
+                v = np.asarray(info["voltages"], dtype=np.float64)
+                violations = np.sum((v < 0.95) | (v > 1.05))
+                episode_voltage_violations += int(violations > 0)
+
+            base_loads.append(base_load)
+            opt_loads.append(opt_load)
             prices_base.append(price_base_vec)
             prices_opt.append(price_opt_vec)
-            actions_sq.append(clipped_flat ** 2)
+            actions_sq.append(clipped ** 2)
 
-        # Convert to arrays: (T, n_agents)
         base_loads = np.asarray(base_loads)
         opt_loads = np.asarray(opt_loads)
         prices_base = np.asarray(prices_base)
         prices_opt = np.asarray(prices_opt)
-        actions_sq = np.asarray(actions_sq)
-
-        # Community load per step
+        
         comm_base = np.sum(base_loads, axis=1)
         comm_opt = np.sum(opt_loads, axis=1)
+        
+        agent_cost_base = np.sum(base_loads * prices_base, axis=0)
+        agent_cost_opt = np.sum(opt_loads * prices_opt, axis=0)
+        agent_savings = agent_cost_base - agent_cost_opt
 
-        # PAR
-        par_b = np.max(comm_base) / (np.mean(comm_base) + 1e-6)
-        par_o = np.max(comm_opt) / (np.mean(comm_opt) + 1e-6)
+        results["par_base"].append(np.max(comm_base) / (np.mean(comm_base) + 1e-6))
+        results["par_opt"].append(np.max(comm_opt) / (np.mean(comm_opt) + 1e-6))
+        results["cost_base"].append(np.sum(base_loads * prices_base))
+        results["cost_opt"].append(np.sum(opt_loads * prices_opt))
+        results["peak_base"].append(np.max(comm_base))
+        results["peak_opt"].append(np.max(comm_opt))
+        results["discomfort"].append(np.mean(actions_sq))
+        results["jains_index"].append(calculate_jains_index(agent_savings))
+        results["voltage_violations"].append(episode_voltage_violations)
 
-        cost_b = np.sum(base_loads * prices_base)
-        cost_o = np.sum(opt_loads * prices_opt)
-
-        # Peak
-        peak_b = np.max(comm_base)
-        peak_o = np.max(comm_opt)
-
-        disc_score = np.mean(actions_sq)
-
-        results["par_base"].append(par_b)
-        results["par_opt"].append(par_o)
-        results["cost_base"].append(cost_b)
-        results["cost_opt"].append(cost_o)
-        results["peak_base"].append(peak_b)
-        results["peak_opt"].append(peak_o)
-        results["discomfort"].append(disc_score)
-
-    df = pd.DataFrame(results)
-
-    summary = pd.DataFrame(
-        {
-            "Metric": ["PAR", "Total Cost", "Peak Load", "Avg Discomfort"],
-            "Baseline (Mean)": [
-                df["par_base"].mean(),
-                df["cost_base"].mean(),
-                df["peak_base"].mean(),
-                0.0,
-            ],
-            "MAPPO (Mean)": [
-                df["par_opt"].mean(),
-                df["cost_opt"].mean(),
-                df["peak_opt"].mean(),
-                df["discomfort"].mean(),
-            ],
-            "Improvement (%)": [
-                (df["par_base"].mean() - df["par_opt"].mean())
-                / (df["par_base"].mean() + 1e-12)
-                * 100,
-                (df["cost_base"].mean() - df["cost_opt"].mean())
-                / (df["cost_base"].mean() + 1e-12)
-                * 100,
-                (df["peak_base"].mean() - df["peak_opt"].mean())
-                / (df["peak_base"].mean() + 1e-12)
-                * 100,
-                np.nan,
-            ],
-        }
-    )
-
-    return summary
+    summary = {
+        "Metric": [
+            "PAR (Base)", "PAR (Opt)", 
+            "Cost (Base)", "Cost (Opt)", 
+            "Peak (Base)", "Peak (Opt)", 
+            "Discomfort", "Jain's Index", "Voltage Violations"
+        ],
+        "Value": [
+            np.mean(results["par_base"]), np.mean(results["par_opt"]),
+            np.mean(results["cost_base"]), np.mean(results["cost_opt"]),
+            np.mean(results["peak_base"]), np.mean(results["peak_opt"]),
+            np.mean(results["discomfort"]), np.mean(results["jains_index"]),
+            np.mean(results["voltage_violations"])
+        ]
+    }
+    return pd.DataFrame(summary)

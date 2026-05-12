@@ -98,11 +98,15 @@ $$
 
 Flexibility:
 
-$F_i(t) = 1 - O_i(t)$
+$$ 
+F_i(t) = 1 - O_i(t)
+$$
 
 Dynamic action bounds:
 
-$a_i(t) \in [-F_i(t), F_i(t)]$
+$$
+a_i(t) \in [-F_i(t), F_i(t)]
+$$
 
 This prevents aggressive load shifting during high-occupancy periods.
 
@@ -118,14 +122,14 @@ The reward jointly optimizes:
 - Thermal safety
 - Occupant comfort
 
-$
+$$
 r_i^t =
 -\lambda_c \pi(t)P_i^{load}(t)
 -\lambda_p P_{tot}(t)
 -\lambda_V \Delta V_t
 -\lambda_S \Delta S_t
 -\lambda_d D_i^t
-$
+$$
 
 ---
 
@@ -184,8 +188,10 @@ Residential agents mapped to:
 ---
 
 ## Behavioral Heterogeneity Under Income Sensitivity
+<p align="center">
+  <img src="results/Experiment_2025-12-30_16-01/inference_images/mappo/high_low_income_comparison.png" width="800"/>
+</p>
 
-results/Experiment_2025-12-30_16-01/inference_images/mappo/high_low_income_comparison.png
 
 **Figure:** Heterogeneous household responses under different economic sensitivity and pricing elasticity conditions.
 
@@ -195,8 +201,8 @@ results/Experiment_2025-12-30_16-01/inference_images/mappo/high_low_income_compa
 
 | Metric | Baseline | MAPPO | Improvement |
 |---|---|---|---|
-| Total Cost | 370.54 | 196.15 | **47.06% â†“** |
-| Peak Load | 6.37 kW | 4.22 kW | **33.78% â†“** |
+| Total Cost | 370.54 | 196.15 | **47.06%“** |
+| Peak Load | 6.37 kW | 4.22 kW | **33.78%“** |
 | PAR | 1.9531 | 1.9069 | Improved |
 | Fairness Index | 1.000 | 0.967 | High fairness retained |
 

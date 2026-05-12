@@ -92,9 +92,7 @@ BI-MARL-DR-UrbanMicrogrids/
 
 Occupancy signal:
 
-```math 
-O_i(t) \in [0,1]
-```
+`O_i(t) \in [0,1]`
 
 Flexibility:
 

@@ -71,17 +71,17 @@ during training.
 
 ```text
 BI-MARL-DR-UrbanMicrogrids/
-â”‚
-â”œâ”€â”€ environments/        # Grid and DR simulation environments
-â”œâ”€â”€ agents/              # MAPPO actor-critic implementations
-â”œâ”€â”€ networks/            # Neural network architectures
-â”œâ”€â”€ training/            # Training loops and PPO updates
-â”œâ”€â”€ utils/               # Helper functions and metrics
-â”œâ”€â”€ data/                # Load profiles and pricing signals
-â”œâ”€â”€ results/             # Saved models and evaluation outputs
-â”œâ”€â”€ plots/               # Figures and visualizations
-â”œâ”€â”€ configs/             # Experiment configurations
-â””â”€â”€ README.md
+
+ environments/        # Grid and DR simulation environments
+ agents/              # MAPPO actor-critic implementations
+ networks/            # Neural network architectures
+ training/            # Training loops and PPO updates
+ utils/               # Helper functions and metrics
+ data/                # Load profiles and pricing signals
+ results/             # Saved models and evaluation outputs
+ plots/               # Figures and visualizations
+ configs/             # Experiment configurations
+ README.md
 ```
 
 ---
@@ -92,21 +92,15 @@ BI-MARL-DR-UrbanMicrogrids/
 
 Occupancy signal:
 
-\[
-O_i(t) \in [0,1]
-\]
+$O_i(t) \in [0,1]$
 
 Flexibility:
 
-\[
-F_i(t) = 1 - O_i(t)
-\]
+$F_i(t) = 1 - O_i(t)$
 
 Dynamic action bounds:
 
-\[
-a_i(t) \in [-F_i(t), F_i(t)]
-\]
+$a_i(t) \in [-F_i(t), F_i(t)]$
 
 This prevents aggressive load shifting during high-occupancy periods.
 
@@ -122,14 +116,14 @@ The reward jointly optimizes:
 - Thermal safety
 - Occupant comfort
 
-\[
+$
 r_i^t =
 -\lambda_c \pi(t)P_i^{load}(t)
 -\lambda_p P_{tot}(t)
 -\lambda_V \Delta V_t
 -\lambda_S \Delta S_t
 -\lambda_d D_i^t
-\]
+$
 
 ---
 
@@ -157,7 +151,7 @@ Residential agents mapped to:
 ## MAPPO Training Convergence
 
 <p align="center">
-  <img src="results/mappo_training_convergence.png" width="800"/>
+  <img src="results/Experiment_2025-12-30_16-01/training_results/mappo/training_curve.png" width="800"/>
 </p>
 
 **Figure:** MAPPO learning convergence across training episodes showing stable policy improvement and reward optimization.
@@ -167,7 +161,7 @@ Residential agents mapped to:
 ## Community Peak Shaving Analysis
 
 <p align="center">
-  <img src="results/community_peak_shaving.png" width="800"/>
+  <img src="results/Experiment_2025-12-30_16-01/inference_images/mappo/paper_fig_3_community_peak_shaving.png" width="800"/>
 </p>
 
 **Figure:** Community-level load profile before and after MARL-based coordinated demand response.
@@ -177,7 +171,10 @@ Residential agents mapped to:
 ## Single Home Optimization Examples
 
 <p align="center">
-  <img src="results/single_home_optimization.png" width="800"/>
+  <img src="results/Experiment_2025-12-30_16-01/inference_images/mappo/paper_fig_2_single_agent_6.png" width="800"/>
+</p>
+<p align="center">
+  <img src="results/Experiment_2025-12-30_16-01/inference_images/mappo/paper_fig_2_single_agent_9.png" width="800"/>
 </p>
 
 **Figure:** Example residential load adaptation under dynamic pricing and occupancy-aware flexibility.
@@ -186,9 +183,7 @@ Residential agents mapped to:
 
 ## Behavioral Heterogeneity Under Income Sensitivity
 
-<p align="center">
-  <img src="results/income_sensitivity_behavior.png" width="800"/>
-</p>
+results/Experiment_2025-12-30_16-01/inference_images/mappo/high_low_income_comparison.png
 
 **Figure:** Heterogeneous household responses under different economic sensitivity and pricing elasticity conditions.
 
@@ -231,27 +226,12 @@ pip install -r requirements.txt
 
 ---
 
-# Training
+# Training and Evaluation
 
 ```bash
-python train.py
+run_full_experiment.py
 ```
-
-or
-
-```bash
-python main.py
-```
-
-depending on repository structure.
-
 ---
-
-# Evaluation
-
-```bash
-python evaluate.py
-```
 
 Generated outputs may include:
 

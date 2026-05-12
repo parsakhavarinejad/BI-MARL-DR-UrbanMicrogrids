@@ -1,162 +1,287 @@
 # BI-MARL-DR-UrbanMicrogrids
 
-> **Blockchain-Integrated Multi-Agent Reinforcement Learning for Continuous Dynamic Pricing and Occupancy-Aware Demand Response in Urban Microgrids**
+> Multi-Agent Reinforcement Learning for Continuous Dynamic Pricing and Occupancy-Aware Demand Response in Urban Microgrids
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-
-This repository contains the official implementation of the framework proposed in our paper. We introduce a closed-loop intelligent microgrid control architecture integrating behavioral modeling, Multi-Agent Reinforcement Learning (MARL)-based decision-making, and trustless incentive mechanisms to optimize continuous dynamic electricity pricing and occupancy-aware demand response.
-
----
-
-## 📑 Table of Contents
-1. [Introduction](#introduction)
-2. [Key Features](#key-features)
-3. [Methodology & Architecture](#methodology--architecture)
-4. [Supported Algorithms](#supported-algorithms)
-5. [Evaluation Metrics](#evaluation-metrics)
-6. [Dataset Preparation](#dataset-preparation)
-7. [Installation & Usage](#installation--usage)
-8. [Repository Structure](#repository-structure)
-9. [Citation](#citation)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)]()
+[![PyTorch](https://img.shields.io/badge/PyTorch-MAPPO-red.svg)]()
+[![IEEE 33/69 Bus](https://img.shields.io/badge/Power%20System-IEEE%2033%2F69%20Bus-green.svg)]()
+[![MARL](https://img.shields.io/badge/MARL-MAPPO-orange.svg)]()
 
 ---
 
-## 📖 Introduction
+## Overview
 
-Modern urban microgrids require highly adaptive demand response (DR) mechanisms to balance grid stability, user comfort, and energy costs. This project implements a **Blockchain-Integrated MARL (BI-MARL)** approach where individual households act as autonomous agents reacting to dynamic continuous pricing. 
+This repository contains the implementation of a physically grounded Multi-Agent Reinforcement Learning (MARL) framework for:
 
-Agents learn to shift their loads to off-peak hours based on state vectors that include behavioral features (income band, urban/rural class) and environmental factors (temperature, time of day, historical load).
+- Continuous dynamic pricing
+- Occupancy-aware demand response (DR)
+- Constraint-aware energy management
+- Urban microgrid optimization
 
----
+The framework models each household as an autonomous reinforcement learning agent that adapts electricity consumption based on:
 
-## ✨ Key Features
+- Dynamic electricity prices
+- Occupancy-derived behavioral flexibility
+- Local load states
+- Distribution grid constraints
 
-* **Continuous Dynamic Pricing & Load Control**: Agents output continuous consumption-adjustment actions $a \in [-1, 1]$ directly mapped to load scaling, driven by dynamically calculated community pricing.
-* **Occupancy-Aware Demand Response**: Embedded behavioral features (e.g., from the IDEAL dataset) and external variables into local agent state vectors.
-* **CTDE MARL Framework**: Centralized Training with Decentralized Execution architectures ensuring global grid stability while maintaining household privacy.
-* **Grid-Aware Constraints**: Tracks voltage drop violations to penalize actions that threaten distribution-level network stability.
+A MAPPO (Multi-Agent Proximal Policy Optimization) architecture with decentralized actors and a centralized critic is used to stabilize cooperative learning under shared network conditions.
 
----
+The system is evaluated on:
 
-## 🧠 Methodology & Architecture
+- IEEE 33-bus radial feeder
+- IEEE 69-bus radial feeder
 
-![Placeholder: System Architecture](<IMAGE_1_PLACEHOLDER_PATH> "Figure 1: BI-MARL System Architecture Overview")
-*Figure 1: Overview of the BI-MARL architecture showing the interaction between household agents, the centralized critic, the smart grid environment, and the dynamic pricing mechanism.*
+while explicitly enforcing:
 
-Our framework simulates a continuous 15-minute interval environment (96 steps/day). The pricing function applies a non-linear penalty for aggregate community peak loads, incentivizing agents to collaboratively "shave" the peak without explicit peer-to-peer communication.
+- Voltage magnitude constraints
+- Line thermal constraints
 
----
-
-## 🤖 Supported Algorithms
-
-We benchmark state-of-the-art multi-agent RL algorithms alongside heuristic baselines. 
-
-| Algorithm | Type | Paradigm | Description |
-| :--- | :--- | :--- | :--- |
-| **MAPPO** | On-Policy | CTDE | Multi-Agent PPO with centralized critic and global state sharing. |
-| **IPPO** | On-Policy | Decentralized | Independent PPO where each agent acts and learns independently. |
-| **MADDPG** | Off-Policy | CTDE | Multi-Agent Deep Deterministic Policy Gradient. |
-| **MATD3** | Off-Policy | CTDE | Twin Delayed DDPG adapted for multi-agent systems. |
-| **ToU (Baseline)** | Heuristic | Fixed Rule | Time-of-Use pricing heuristic (peak shedding / off-peak charging). |
-| **Rule (Baseline)** | Heuristic | Threshold | Deterministic threshold-based response to real-time pricing. |
+during training.
 
 ---
 
-## 📊 Evaluation Metrics
+# Paper
 
-Agents and community behaviors are evaluated on a strict set of grid and economic metrics. Below is a placeholder for your experimental results table.
+**Multi-Agent Reinforcement Learning for Continuous Dynamic Pricing and Occupancy-Aware Demand Response in Urban Microgrids**
 
-| Metric | Description | Model A (e.g. MAPPO) | Baseline (e.g. ToU) |
-| :--- | :--- | :---: | :---: |
-| **PAR (Peak-to-Average Ratio)** | Grid load stability indicator. | *[Result]* | *[Result]* |
-| **Cost (Opt)** | Total monetary cost post-optimization. | *[Result]* | *[Result]* |
-| **Peak Load** | Maximum continuous community draw. | *[Result]* | *[Result]* |
-| **Discomfort** | Mean squared action penalties (user effort). | *[Result]* | *[Result]* |
-| **Jain's Fairness Index** | Distribution of cost savings among agents. | *[Result]* | *[Result]* |
-| **Voltage Violations** | Number of episodes with $V < 0.95$ or $V > 1.05$. | *[Result]* | *[Result]* |
+### Authors
+- Niko Rokni Lamouki
+- Parsa Khavarinejad
+- Salma Soofiyan
+- Amin Karami
 
 ---
 
-## 📈 Visualizing Results
+# Key Features
 
-![Placeholder: Training Convergence](<IMAGE_2_PLACEHOLDER_PATH> "Figure 2: Reward Convergence across Algorithms")
-*Figure 2: Moving average of the total community reward over training episodes comparing MAPPO, MADDPG, and MATD3.*
-
-![Placeholder: Community Peak Shaving](<IMAGE_3_PLACEHOLDER_PATH> "Figure 3: Community Baseline vs Optimized Load")
-*Figure 3: Analysis of community peak shaving and resulting dynamic pricing curves during an evaluation episode.*
+- Multi-Agent PPO (MAPPO)
+- Continuous action-space demand control
+- Occupancy-aware behavioral flexibility modeling
+- IEEE 33-bus and 69-bus feeder simulations
+- Embedded voltage and thermal constraint enforcement
+- Centralized training / decentralized execution
+- Dynamic pricing environment
+- Fairness-aware optimization
+- Grid-aware coordinated peak shaving
 
 ---
 
-## 💾 Dataset Preparation
+# Repository Structure
 
-The environment requires real-world household consumption data. We utilize the **IDEAL** dataset.
+```text
+BI-MARL-DR-UrbanMicrogrids/
+â”‚
+â”œâ”€â”€ environments/        # Grid and DR simulation environments
+â”œâ”€â”€ agents/              # MAPPO actor-critic implementations
+â”œâ”€â”€ networks/            # Neural network architectures
+â”œâ”€â”€ training/            # Training loops and PPO updates
+â”œâ”€â”€ utils/               # Helper functions and metrics
+â”œâ”€â”€ data/                # Load profiles and pricing signals
+â”œâ”€â”€ results/             # Saved models and evaluation outputs
+â”œâ”€â”€ plots/               # Figures and visualizations
+â”œâ”€â”€ configs/             # Experiment configurations
+â””â”€â”€ README.md
+```
 
-1. Download the raw IDEAL dataset.
-2. Run the provided Jupyter Notebook to clean, interploate missing values, append weather data, and extract the best 50 agents with contiguous 96-step (daily) data:
-   ```bash
-   jupyter notebook data/Shrinking_IDEAL_data.ipynb
-   ```
+---
 
-## 🚀 Installation & Usage
+# Methodology
 
-1. Setup Environment
+## Occupancy-Aware Flexibility
 
-```git clone [https://github.com/your-username/BI-MARL-DR-UrbanMicrogrids.git](https://github.com/your-username/BI-MARL-DR-UrbanMicrogrids.git)
+Occupancy signal:
+
+\[
+O_i(t) \in [0,1]
+\]
+
+Flexibility:
+
+\[
+F_i(t) = 1 - O_i(t)
+\]
+
+Dynamic action bounds:
+
+\[
+a_i(t) \in [-F_i(t), F_i(t)]
+\]
+
+This prevents aggressive load shifting during high-occupancy periods.
+
+---
+
+## Reward Function
+
+The reward jointly optimizes:
+
+- Energy cost
+- Peak reduction
+- Voltage safety
+- Thermal safety
+- Occupant comfort
+
+\[
+r_i^t =
+-\lambda_c \pi(t)P_i^{load}(t)
+-\lambda_p P_{tot}(t)
+-\lambda_V \Delta V_t
+-\lambda_S \Delta S_t
+-\lambda_d D_i^t
+\]
+
+---
+
+# Experimental Setup
+
+## Test Feeders
+
+### IEEE 33-Bus
+Residential agents mapped to:
+
+```text
+{6, 9, 12, 14, 18, 21, 25, 28, 30, 31, 32, 33}
+```
+
+### IEEE 69-Bus
+
+```text
+{8, 12, 18, 21, 27, 35, 42, 48, 52, 60, 65, 69}
+```
+
+---
+
+# Results
+
+## MAPPO Training Convergence
+
+<p align="center">
+  <img src="results/mappo_training_convergence.png" width="800"/>
+</p>
+
+**Figure:** MAPPO learning convergence across training episodes showing stable policy improvement and reward optimization.
+
+---
+
+## Community Peak Shaving Analysis
+
+<p align="center">
+  <img src="results/community_peak_shaving.png" width="800"/>
+</p>
+
+**Figure:** Community-level load profile before and after MARL-based coordinated demand response.
+
+---
+
+## Single Home Optimization Examples
+
+<p align="center">
+  <img src="results/single_home_optimization.png" width="800"/>
+</p>
+
+**Figure:** Example residential load adaptation under dynamic pricing and occupancy-aware flexibility.
+
+---
+
+## Behavioral Heterogeneity Under Income Sensitivity
+
+<p align="center">
+  <img src="results/income_sensitivity_behavior.png" width="800"/>
+</p>
+
+**Figure:** Heterogeneous household responses under different economic sensitivity and pricing elasticity conditions.
+
+---
+
+# Performance Summary
+
+| Metric | Baseline | MAPPO | Improvement |
+|---|---|---|---|
+| Total Cost | 370.54 | 196.15 | **47.06% â†“** |
+| Peak Load | 6.37 kW | 4.22 kW | **33.78% â†“** |
+| PAR | 1.9531 | 1.9069 | Improved |
+| Fairness Index | 1.000 | 0.967 | High fairness retained |
+
+---
+
+# Installation
+
+## Clone Repository
+
+```bash
+git clone https://github.com/parsakhavarinejad/BI-MARL-DR-UrbanMicrogrids.git
+
 cd BI-MARL-DR-UrbanMicrogrids
+```
+
+## Create Environment
+
+```bash
+conda create -n bimarl python=3.10
+
+conda activate bimarl
+```
+
+## Install Dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-2. Hyperparameter Tuning (Optuna)
-To search for optimal actor/critic learning rates, entropy coefficients, and clipping ratios:
+---
 
-```
-python src/optuna_tune.py --config configs/config.yaml --trials 30 --train_episodes 20 --eval_episodes 10
-```
+# Training
 
-3. Run the Full Experiment Suite
-To train all algorithms sequentially, evaluate them against rule-based baselines, and automatically generate comparison tables and charts (saved to `results/Experiment_Name/`):
-
-```
-python run_full_experiment.py
+```bash
+python train.py
 ```
 
-4. Run a Specific Algorithm
-To manually train a single algorithm (e.g., MAPPO) using the main configuration file:
-```
-python src/main.py --config configs/config.yaml --algo mappo --exp_name my_custom_run
+or
+
+```bash
+python main.py
 ```
 
-## 📁 Repository Structure
-```
-BI-MARL-DR-UrbanMicrogrids/
-├── configs/
-│   └── config.yaml            # Environment, network, and training parameters
-├── data/
-│   └── Shrinking_IDEAL_data.ipynb # Data preprocessing & feature engineering pipeline
-├── src/
-│   ├── envs/
-│   │   └── smart_grid_env.py  # Custom Gym environment with dynamic pricing
-│   ├── marl/
-│   │   ├── agents/            # MAPPO, IPPO, MADDPG, MATD3, ToU, Rule-based
-│   │   └── networks/          # Actor and Critic standard/Q-networks
-│   ├── utils/                 # Data loading, experiment logging, and visualization
-│   ├── main.py                # Main training loop script
-│   ├── evaluation.py          # Metric calculations (PAR, Jain's, Voltage, etc.)
-│   ├── compare_models.py      # Cross-model evaluation script
-│   └── optuna_tune.py         # Automated hyperparameter search
-├── run_full_experiment.py     # End-to-end execution pipeline
-└── README.md
+depending on repository structure.
+
+---
+
+# Evaluation
+
+```bash
+python evaluate.py
 ```
 
-## 📝 Citation
-If you use this code in your research, please cite our paper:
+Generated outputs may include:
 
-```
-@article{your_paper_2025,
-  title={Blockchain-Integrated Multi-Agent Reinforcement Learning for Continuous Dynamic Pricing and Occupancy-Aware Demand Response in Urban Microgrids},
-  author={Khavarinejad, Parsa and ...},
-  journal={TBD},
-  year={2025}
+- Training curves
+- Peak shaving analysis
+- Cost reduction statistics
+- Fairness metrics
+- Voltage violation statistics
+
+---
+
+# Citation
+
+```bibtex
+@article{lamouki2026marl,
+  title={Multi-Agent Reinforcement Learning for Continuous Dynamic Pricing and Occupancy-Aware Demand Response in Urban Microgrids},
+  author={Lamouki, Niko Rokni and Khavarinejad, Parsa and Soofiyan, Salma and Karami, Amin},
+  year={2026}
 }
-````
+```
+
+---
+
+# License
+
+This project is released under the MIT License.
+
+---
+
+# Contact
+
+### Parsa Khavarinejad
+- GitHub: [@parsakhavarinejad](https://github.com/parsakhavarinejad)
